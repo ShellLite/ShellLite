@@ -1,4 +1,4 @@
-<img src="assets/logo.png" align="right" width="250" alt="ShellLite Logo" />
+<img src="assets/new_logo.png" align="right" width="250" alt="ShellLite Logo" />
 
 # ShellLite
 
