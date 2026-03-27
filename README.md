@@ -47,36 +47,29 @@ ShellLite is a modern programming language designed to prioritize human readabil
 
 ```mermaid
 flowchart TB
-    subgraph Input
-        A[Source Code .shl]
+    subgraph "Input"
+        A[Source] --> B[Lexer]
     end
     
-    subgraph Frontend
-        B[Lexer]
-        C[Parser]
-        D[AST]
+    subgraph "GBP Frontend"
+        B --> C[Topology Scan]
+        C --> D[GeoNode Tree]
+        D --> E[Binding Engine]
+        E --> F[Iterative Resolver]
     end
     
-    subgraph Backend
-        E{Execution Mode}
-        F[Interpreter]
-        G[LLVM Codegen]
-        H[JS Compiler]
-        I[Python Transpiler]
+    subgraph "Backend"
+        F --> G[AST]
+        G --> H[Interpreter]
+        G --> I[LLVM IR]
+        G --> J[Transpilers]
     end
     
-    subgraph Output
-        J[Runtime Execution]
-        K[Native Binary]
-        L[JavaScript File]
-        M[Python File]
+    subgraph "Output"
+        H --> K[Output]
+        I --> L[Binary]
+        J --> M[Code]
     end
-    
-    A --> B --> C --> D --> E
-    E -->|interpret| F --> J
-    E -->|compile llvm| G --> K
-    E -->|compile js| H --> L
-    E -->|compile python| I --> M
 ```
 
 ### Compilation Pipeline
