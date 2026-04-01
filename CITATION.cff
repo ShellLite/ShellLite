@@ -4,11 +4,7 @@ authors:
 - family-names: "Naithani"
   given-names: "Shrey"
 title: "ShellLite"
-<<<<<<< Updated upstream
-version: 0.5.3.4
-=======
 version: 0.5.3.5
->>>>>>> Stashed changes
 date-released: 2026-01-10
 url: "https://shelllite.tech"
 repository-code: "https://github.com/ShellLite/ShellLite"
@@ -19,8 +15,4 @@ keywords:
   - education
   - automation
   - natural-language-programming
-<<<<<<< Updated upstream
 license: GPLv3 with classpath exception
-=======
-license: GPLv3 with classpath exception
->>>>>>> Stashed changes
