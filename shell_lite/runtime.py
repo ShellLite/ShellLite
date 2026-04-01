@@ -4,6 +4,10 @@ import sys
 import subprocess
 import json
 import math
+"""
+-----Purpose: Standard built-in functionality and library wrappers for the 
+              Shell-Lite execution runtime.
+"""
 import time
 import random
 import urllib.request
@@ -33,18 +37,31 @@ class Environment:
         self.constants: set = set()
         self.parent = parent
     def get(self, name: str) -> Any:
+        """
+        -----Purpose: Retrieves a variable's value from the current scope or 
+        -----        parent scopes.
+        """
         if name in self.variables:
             return self.variables[name]
         if self.parent:
             return self.parent.get(name)
         raise NameError(f"Variable '{name}' is not defined.")
+
     def set(self, name: str, value: Any):
+        """
+        -----Purpose: Assigns a value to a variable in the current scope, 
+        -----        enforcing constant protection.
+        """
         if name in self.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
         if self.parent and name in self.parent.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
         self.variables[name] = value
+
     def set_const(self, name: str, value: Any):
+        """
+        -----Purpose: Declares a new constant in the current scope.
+        """
         if name in self.variables:
             raise RuntimeError(f"Constant '{name}' already declared")
         self.variables[name] = value
@@ -64,6 +81,10 @@ class Tag:
                  return
         self.children.append(child)
     def __str__(self):
+        """
+        -----Purpose: Serializes the tag and its children into an HTML/XML 
+        -----        string representation.
+        """
         attr_str = ""
         for k, v in self.attrs.items():
             attr_str += f' {k}="{v}"'
@@ -88,11 +109,14 @@ class WebBuilder:
         if self.stack:
             self.stack[-1].add(text)
 def slang_run(cmd):
+    """
+    -----Purpose: Executes a system command and returns the trimmed stdout.
+    """
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Command Error: {result.stderr}")
-        return result.stdout.strip()
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if res.returncode != 0:
+            print(f"Command Error: {res.stderr}")
+        return res.stdout.strip()
     except Exception as e:
         raise RuntimeError(f"Failed to run command: {e}")
 def slang_read(path):
@@ -127,15 +151,20 @@ def slang_http_get(url):
     except Exception as e:
         raise RuntimeError(f"HTTP GET failed for '{url}': {e}")
 def slang_http_post(url, data_dict):
+    """
+    -----Purpose: Performs a synchronous HTTP POST request with a JSON body.
+    """
     try:
         if isinstance(data_dict, Instance):
             data_dict = data_dict.data
         data = json.dumps(data_dict).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        headers = {'Content-Type': 'application/json'}
+        req = urllib.request.Request(url, data=data, headers=headers)
         with urllib.request.urlopen(req) as response:
              return response.read().decode('utf-8')
     except Exception as e:
-        raise RuntimeError(f"HTTP POST failed for '{url}': {e}")
+        msg = f"HTTP POST failed for '{url}': {e}"
+        raise RuntimeError(msg)
 def slang_download(url):
     filename = url.split('/')[-1] or "downloaded_file"
     try:
@@ -146,11 +175,16 @@ def slang_download(url):
     except Exception as e:
         raise RuntimeError(f"Download failed: {e}")
 def slang_archive(op, source, target):
+    """
+    -----Purpose: Compresses or extracts ZIP archives.
+    """
     try:
+        import zipfile
         if op == 'compress':
             if os.path.isfile(source):
                 with zipfile.ZipFile(target, 'w') as zipf:
-                    zipf.write(source, arcname=os.path.basename(source))
+                    n = os.path.basename(source)
+                    zipf.write(source, arcname=n)
             elif os.path.isdir(source):
                 shutil.make_archive(target.replace('.zip',''), 'zip', source)
         else:
@@ -164,13 +198,20 @@ def slang_csv_load(path):
         reader = csv.DictReader(f)
         return [row for row in reader]
 def slang_csv_save(data, path):
+    """
+    -----Purpose: Saves a list of dictionaries or Instances to a CSV file.
+    """
     import csv
-    if not isinstance(data, list): data = [data]
-    if not data: return
+    if not isinstance(data, list):
+        data = [data]
+    if not data:
+        return
     rows = []
     for item in data:
-        if isinstance(item, Instance): rows.append(item.data)
-        elif isinstance(item, dict): rows.append(item)
+        if isinstance(item, Instance):
+            rows.append(item.data)
+        elif isinstance(item, dict):
+            rows.append(item)
     if rows:
         keys = rows[0].keys()
         with open(path, 'w', newline='') as f:
@@ -221,7 +262,8 @@ def slang_date_parse(expr):
     if s.startswith('next '):
         day_str = s.replace('next ', '').strip()
         if day_str in days:
-            target_idx = days.index(day_str); current_idx = today.weekday()
+            target_idx = days.index(day_str)
+            current_idx = today.weekday()
             days_ahead = target_idx - current_idx
             if days_ahead <= 0: days_ahead += 7
             return (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
@@ -235,22 +277,47 @@ def slang_file_read(path):
 import sqlite3
 _slang_db_conn = None
 def slang_db_open(path):
+    """
+    -----Purpose: Opens a connection to a SQLite database with dict support.
+    """
     global _slang_db_conn
     _slang_db_conn = sqlite3.connect(path, check_same_thread=False)
-    _slang_db_conn.row_factory = lambda c, r: {col[0]: r[idx] for idx, col in enumerate(c.description)}
+    def dict_factory(cursor, row):
+        return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+    _slang_db_conn.row_factory = dict_factory
     return True
+
 def slang_db_close():
+    """
+    -----Purpose: Closes the global database connection.
+    """
     global _slang_db_conn
-    if _slang_db_conn: _slang_db_conn.close(); _slang_db_conn = None
+    if _slang_db_conn:
+        _slang_db_conn.close()
+        _slang_db_conn = None
 def slang_db_exec(sql, params=None):
-    if not _slang_db_conn: raise RuntimeError("DB not open")
-    if params is None: params = []
-    c = _slang_db_conn.cursor(); c.execute(sql, params); _slang_db_conn.commit()
+    """
+    -----Purpose: Executes a non-query SQL statement and returns the last row ID.
+    """
+    if not _slang_db_conn:
+        raise RuntimeError("DB not open")
+    if params is None:
+        params = []
+    c = _slang_db_conn.cursor()
+    c.execute(sql, params)
+    _slang_db_conn.commit()
     return c.lastrowid
+
 def slang_db_query(sql, params=None):
-    if not _slang_db_conn: raise RuntimeError("DB not open")
-    if params is None: params = []
-    c = _slang_db_conn.cursor(); c.execute(sql, params)
+    """
+    -----Purpose: Executes a SQL query and returns all rows as a list of dicts.
+    """
+    if not _slang_db_conn:
+        raise RuntimeError("DB not open")
+    if params is None:
+        params = []
+    c = _slang_db_conn.cursor()
+    c.execute(sql, params)
     return c.fetchall()
 def slang_json_stringify(val):
     if isinstance(val, (Instance, dict)):
@@ -260,10 +327,18 @@ def slang_json_stringify(val):
          return json.dumps([v.data if isinstance(v, Instance) else v for v in val])
     return json.dumps(val)
 def slang_color_print(val, color=None, style=None):
-    colors = {'red': '91', 'green': '92', 'yellow': '93', 'blue': '94', 'magenta': '95', 'cyan': '96'}
+    """
+    -----Purpose: Prints text to the console with ANSI color codes.
+    """
+    colors = {
+        'red': '91', 'green': '92', 'yellow': '93', 
+        'blue': '94', 'magenta': '95', 'cyan': '96'
+    }
     parts = []
-    if style == 'bold': parts.append('1')
-    if color and color.lower() in colors: parts.append(colors[color.lower()])
+    if style == 'bold':
+        parts.append('1')
+    if color and color.lower() in colors:
+        parts.append(colors[color.lower()])
     if parts:
         print(f"\033[{';'.join(parts)}m{val}\033[0m")
     else:
@@ -289,13 +364,17 @@ def slang_confirm(prompt):
     root.destroy()
     return val
 def get_std_modules():
+    """
+    -----Purpose: Returns a mapping of logical module names to their 
+    -----        underlying function/object dictionaries.
+    """
     return {
         'math': {
             'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
             'sqrt': math.sqrt, 'floor': math.floor, 'ceil': math.ceil,
             'abs': abs, 'pow': pow, 'log': math.log, 'log10': math.log10,
-            'exp': math.exp, 'random': random.random, 'randint': random.randint,
-            'pi': math.pi, 'e': math.e,
+            'exp': math.exp, 'random': random.random, 
+            'randint': random.randint, 'pi': math.pi, 'e': math.e,
         },
         'time': {
             'time': time.time, 'sleep': time.sleep,
@@ -332,30 +411,48 @@ def get_std_modules():
         },
         're': {
             'match': lambda p, s: bool(re.match(p, s)),
-            'search': lambda p, s: re.search(p, s).group() if re.search(p, s) else None,
+            'search': lambda p, s: (
+                re.search(p, s).group() if re.search(p, s) else None
+            ),
             'replace': lambda p, r, s: re.sub(p, r, s),
             'findall': lambda p, s: re.findall(p, s),
             'split': lambda p, s: re.split(p, s),
         },
     }
 def slang_map(lst, func):
+    """
+    -----Purpose: Applies a function to every item in a list.
+    """
     if callable(func):
         return [func(x) for x in lst]
     raise TypeError("map requires a callable")
 def slang_filter(lst, func):
+    """
+    -----Purpose: Filters a list based on a predicate function.
+    """
     if callable(func):
         return [x for x in lst if func(x)]
     raise TypeError("filter requires a callable")
 def slang_reduce(lst, func, initial=None):
+    """
+    -----Purpose: Reduces a list to a single value using an accumulator.
+    """
     if callable(func):
         if initial is not None:
             return functools.reduce(func, lst, initial)
         return functools.reduce(func, lst)
     raise TypeError("reduce requires a callable")
 def slang_push(lst, item):
+    """
+    -----Purpose: Appends an item to a list and returns None.
+    """
     lst.append(item)
     return None
 def get_builtins():
+    """
+    -----Purpose: Returns a global mapping of ShellLite built-in functions 
+    -----        to their Python equivalents.
+    """
     return {
         'str': str, 'int': int, 'float': float, 'bool': bool,
         'list': list, 'len': len,
@@ -410,7 +507,9 @@ def get_builtins():
         'unique': lambda l: list(dict.fromkeys(l)),
         'first': lambda l: l[0] if l else None,
         'last': lambda l: l[-1] if l else None,
-        'empty': lambda x: len(x) == 0 if hasattr(x, '__len__') else x is None,
+        'empty': lambda x: (
+            len(x) == 0 if hasattr(x, '__len__') else x is None
+        ),
         'keys': lambda d: list(d.keys()),
         'values': lambda d: list(d.values()),
         'items': lambda d: list(d.items()),

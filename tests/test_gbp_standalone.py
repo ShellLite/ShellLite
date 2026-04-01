@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-def test_gbp(code, name):
+def check_gbp(code, name):
     print(f"--- Testing {name} ---")
     print(f"Code:\n{code}")
     lexer = Lexer(code)
@@ -27,11 +27,11 @@ if x > 5:
     print x
     y = x + 1
 """
-    test_gbp(code1, "Basic If")
+    check_gbp(code1, "Basic If")
     code2 = """
 to greet name:
     print "Hello"
     print name
 greet "Bob"
 """
-    test_gbp(code2, "Function Def")
+    check_gbp(code2, "Function Def")

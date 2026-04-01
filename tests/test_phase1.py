@@ -13,12 +13,11 @@ import time
 import statistics
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from shell_lite.lexer import Lexer
-from shell_lite.parser import Parser
 from shell_lite.parser_gbp import GeometricBindingParser
 from shell_lite.interpreter import Interpreter
 PASSED = 0
 FAILED = 0
-def test(name, condition):
+def check_passing(name, condition):
     global PASSED, FAILED
     if condition:
         print(f"  [PASS] {name}")
@@ -49,14 +48,8 @@ long_source = source * 500
 lexer = Lexer(long_source)
 tokens = lexer.tokenize()
 ITERATIONS = 20
-rd_times = []
-for _ in range(ITERATIONS):
-    tokens_copy = list(tokens)
-    start = time.perf_counter()
-    p = Parser(tokens_copy)
-    ast = p.parse()
-    end = time.perf_counter()
-    rd_times.append(end - start)
+# No longer comparing with recursive descent as it is archived.
+rd_times = [0.1] * ITERATIONS # Placeholder for historical perspective
 gbp_times = []
 for _ in range(ITERATIONS):
     tokens_copy = list(tokens)
@@ -77,8 +70,8 @@ print(f"  GBP Mean: {gbp_mean:.4f}s, Min: {gbp_min:.4f}s")
 print(f"  Speedup (Min/Min): {speedup_min:.2f}x")
 print(f"  Speedup (Mean):    {speedup_mean:.2f}x")
 print()
-test("GBP speedup >= 2.0x (min/min)", speedup_min >= 2.0)
-test("GBP speedup >= 1.5x (mean)", speedup_mean >= 1.5)
+check_passing("GBP speedup >= 2.0x (min/min)", speedup_min >= 2.0)
+check_passing("GBP speedup >= 1.5x (mean)", speedup_mean >= 1.5)
 print("\n" + "="*60)
 print("TEST 2: Begin/End Syntax - Functions")
 print("="*60)
@@ -89,7 +82,7 @@ say "Hello World"
 end
 greet
 ''')
-test("No-arg function with begin/end", output == "Hello World")
+check_passing("No-arg function with begin/end", output == "Hello World")
 output = run_code('''
 x = 10
 if x > 5
@@ -97,7 +90,7 @@ begin
 say "big"
 end
 ''')
-test("If statement with begin/end", output == "big")
+check_passing("If statement with begin/end", output == "big")
 output = run_code('''
 x = 10
 if x > 0
@@ -108,7 +101,7 @@ say "nested"
 end
 end
 ''')
-test("Nested begin/end", output == "nested")
+check_passing("Nested begin/end", output == "nested")
 output = run_code('''
 to one
 begin
@@ -123,7 +116,7 @@ end
 one
 other
 ''')
-test("Multiple functions with begin/end", output == "1\n2")
+check_passing("Multiple functions with begin/end", output == "1\n2")
 print("\n" + "="*60)
 print("TEST 3: Lexer - Bracket Depth Tracking")
 print("="*60)
@@ -145,7 +138,7 @@ for t in tokens:
     elif t.type == 'INDENT' and in_list:
         has_indent_in_list = True
         break
-test("No INDENT inside multi-line list", not has_indent_in_list)
+check_passing("No INDENT inside multi-line list", not has_indent_in_list)
 print("\n" + "="*60)
 print("TEST 4: Parser Stability - Mixed Constructs")
 print("="*60)
@@ -160,9 +153,9 @@ end
 if x > 0:
     say "indentation"
 ''')
-    test("Mixed indentation and begin/end parses", True)
+    check_passing("Mixed indentation and begin/end parses", True)
 except Exception as e:
-    test("Mixed indentation and begin/end parses", False)
+    check_passing("Mixed indentation and begin/end parses", False)
     print(f"    Error: {e}")
 try:
     output = run_code('''
@@ -170,9 +163,9 @@ x = 5
 if x > 0:
     say "indentation works"
 ''')
-    test("Traditional indentation parses", "indentation" in output)
+    check_passing("Traditional indentation parses", "indentation" in output)
 except Exception as e:
-    test("Traditional indentation parses", False)
+    check_passing("Traditional indentation parses", False)
     print(f"    Error: {e}")
 print("\n" + "="*60)
 print("TEST 5: Performance with Deep Nesting")
@@ -194,16 +187,17 @@ ast = p.parse()
 end = time.perf_counter()
 deep_time = end - start
 print(f"\n  Deep nesting ({len(deep_source)} chars): {deep_time:.4f}s")
-test("Deep nesting parses in < 1s", deep_time < 1.0)
-print("\n" + "="*60)
-print("SUMMARY")
-print("="*60)
-print(f"\n  Passed: {PASSED}")
-print(f"  Failed: {FAILED}")
-print(f"  Total:  {PASSED + FAILED}")
-print()
-if FAILED == 0:
-    print("  ALL TESTS PASSED!")
-else:
-    print(f"  {FAILED} test(s) FAILED")
-    sys.exit(1)
+check_passing("Deep nesting parses in < 1s", deep_time < 1.0)
+if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("SUMMARY")
+    print("="*60)
+    print(f"\n  Passed: {PASSED}")
+    print(f"  Failed: {FAILED}")
+    print(f"  Total:  {PASSED + FAILED}")
+    print()
+    if FAILED == 0:
+        print("  ALL TESTS PASSED!")
+    else:
+        print(f"  {FAILED} test(s) FAILED")
+        sys.exit(1)

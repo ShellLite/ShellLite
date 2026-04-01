@@ -1,22 +1,53 @@
+"""
+-----Purpose: Lexical Analysis module for ShellLite. Tokenizes source code.
+"""
 import re
 from dataclasses import dataclass
 from typing import List, Optional
 @dataclass
-@dataclass
 class Token:
+    """
+    Represents a lexical token
+
+    Attributes:
+        type (str): The classification of the token (e.g., 'NUMBER', 'STRING', 'IF').
+        value (str): The literal string value of the token from the source code.
+        line (int): The line number where the token appears.
+        column (int): The starting column of the token.
+    """
     type: str
     value: str
     line: int
     column: int = 1
+
+    def __post_init__(self) -> None:
+        assert isinstance(self.type, str), f"Token type must be str, got {type(self.type)}"
+        assert isinstance(self.value, str), f"Token value must be str, got {type(self.value)}"
+        assert isinstance(self.line, int) and self.line > 0, "Token line must be a positive integer"
+        assert isinstance(self.column, int) and self.column > 0, "Token column must be a positive integer"
 class Lexer:
-    def __init__(self, source_code: str):
-        self.source_code = source_code
+    """
+    -----Purpose: Tokenizes raw source code strings into discrete Token structs.
+                  Produces a list of Tokens from raw source code while managing 
+                  indentation levels.
+    """
+    
+    def __init__(self, source_code: str) -> None:
+        """
+        -----Purpose: Initialize the lexer with source code and reset state.
+        """
+        assert isinstance(source_code, str), "source_code must be a string"
+        self.source_code: str = source_code
         self.tokens: List[Token] = []
-        self.current_char_index = 0
-        self.line_number = 1
-        self.indent_stack = [0]
-        self.bracket_depth = 0
+        self.current_char_index: int = 0
+        self.line_number: int = 1
+        self.indent_stack: List[int] = [0]
+        self.bracket_depth: int = 0
     def tokenize(self) -> List[Token]:
+        """
+        -----Purpose: Main entry point for tokenization. Removes comments and 
+                      processes each line.
+        """
         source = self._remove_multiline_comments(self.source_code)
         lines = source.split('\n')
         for line_num, line in enumerate(lines, 1):
@@ -48,7 +79,10 @@ class Lexer:
         self.tokens = self._convert_begin_end(self.tokens)
         return self.tokens
     def _convert_begin_end(self, tokens: List[Token]) -> List[Token]:
-        """Convert BEGIN/END keywords to INDENT/DEDENT for uniform parsing."""
+        """
+        -----Purpose: Convert BEGIN/END keywords to INDENT/DEDENT for 
+                      topological consistency.
+        """
         result = []
         i = 0
         while i < len(tokens):
@@ -66,6 +100,9 @@ class Lexer:
             i += 1
         return result
     def _remove_multiline_comments(self, source: str) -> str:
+        """
+        -----Purpose: Strips multiline /* ... */ comments from the source code.
+        """
         result = []
         i = 0
         while i < len(source):
@@ -81,6 +118,9 @@ class Lexer:
                 i += 1
         return ''.join(result)
     def tokenize_line(self, line: str, start_col: int = 1):
+        """
+        -----Purpose: Processes a single line of code into tokens.
+        """
         pos = 0
         while pos < len(line):
             match = None
@@ -99,16 +139,22 @@ class Lexer:
                     pos += len(value)
                     continue
             if line[pos:pos+3] in ('"""', "'''"):
-                 quote_char = line[pos:pos+3]
-                 pass
+                 raise SyntaxError(f"Multi-line strings are not currently supported by line-based parser at line {self.line_number}")
             if line[pos] in ('"', "'"):
                 quote_char = line[pos]
                 end_quote = line.find(quote_char, pos + 1)
                 if end_quote == -1:
-                    raise SyntaxError(f"Unterminated string on line {self.line_number}")
-                value = line[pos+1:end_quote]
-                value = value.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r").replace("\\\"", "\"").replace("\\\'", "\'")
-                self.tokens.append(Token('STRING', value, self.line_number, current_col))
+                    raise SyntaxError(
+                        f"Unterminated string on line {self.line_number}"
+                    )
+                value = line[pos + 1:end_quote]
+                # Refactor escapes for 80-char compliance
+                value = value.replace("\\n", "\n").replace("\\t", "\t")
+                value = value.replace("\\r", "\r").replace("\\\"", "\"")
+                value = value.replace("\\\'", "\'")
+                self.tokens.append(
+                    Token('STRING', value, self.line_number, current_col)
+                )
                 pos = end_quote + 1
                 continue
             if line[pos:pos+3] == '...':
@@ -129,39 +175,52 @@ class Lexer:
             char = line[pos]
             rest_of_line = line[pos:]
             if rest_of_line.startswith('is at least '):
-                self.tokens.append(Token('GE', '>=', self.line_number, current_col))
-                pos += 12 
+                self.tokens.append(
+                    Token('GE', '>=', self.line_number, current_col)
+                )
+                pos += 12
                 continue
             elif rest_of_line.startswith('is exactly '):
-                self.tokens.append(Token('EQ', '==', self.line_number, current_col))
+                self.tokens.append(
+                    Token('EQ', '==', self.line_number, current_col)
+                )
                 pos += 11
                 continue
             elif rest_of_line.startswith('is less than '):
-                self.tokens.append(Token('LT', '<', self.line_number, current_col))
+                self.tokens.append(
+                    Token('LT', '<', self.line_number, current_col)
+                )
                 pos += 13
                 continue
             elif rest_of_line.startswith('is more than '):
-                self.tokens.append(Token('GT', '>', self.line_number, current_col))
+                self.tokens.append(
+                    Token('GT', '>', self.line_number, current_col)
+                )
                 pos += 13
                 continue
-            if rest_of_line.startswith('the') and (len(rest_of_line) == 3 or not rest_of_line[3].isalnum()):
-                 pos += 3
-                 continue
+            is_the = rest_of_line.startswith('the')
+            if is_the and (len(rest_of_line) == 3 
+                           or not rest_of_line[3].isalnum()):
+                pos += 3
+                continue
             if char == '/':
                 last_type = self.tokens[-1].type if self.tokens else None
-                is_division = False
-                if last_type in ('NUMBER', 'STRING', 'ID', 'RPAREN', 'RBRACKET'):
-                     is_division = True
+                is_division = last_type in (
+                    'NUMBER', 'STRING', 'ID', 'RPAREN', 'RBRACKET'
+                )
                 if not is_division:
                     end_slash = line.find('/', pos + 1)
                     if end_slash != -1:
-                        pattern = line[pos+1:end_slash]
+                        pattern = line[pos + 1:end_slash]
                         flags = ""
                         k = end_slash + 1
                         while k < len(line) and line[k].isalpha():
                             flags += line[k]
                             k += 1
-                        self.tokens.append(Token('REGEX', pattern, self.line_number, current_col))
+                        self.tokens.append(
+                            Token('REGEX', pattern, self.line_number, 
+                                  current_col)
+                        )
                         pos = k
                         continue
             single_char_tokens = {
@@ -212,6 +271,7 @@ class Lexer:
                         'const': 'CONST',
                         'and': 'AND', 'or': 'OR', 'not': 'NOT',
                         'try': 'TRY', 'catch': 'CATCH', 'always': 'ALWAYS', 'finally': 'ALWAYS',
+                        'error': 'ERROR',
                         'use': 'USE', 'as': 'AS', 'share': 'SHARE',
                         'import': 'IMPORT',
                         'execute': 'EXECUTE', 'run': 'EXECUTE',
@@ -274,7 +334,11 @@ class Lexer:
                         'ask': 'ASK',
                     }
                     token_type = keywords.get(value, 'ID')
-                    self.tokens.append(Token(token_type, value, self.line_number, current_col))
+                    self.tokens.append(
+                        Token(token_type, value, self.line_number, current_col)
+                    )
                     pos += len(value)
                     continue
-            raise SyntaxError(f"Illegal character '{char}' at line {self.line_number}")
+            raise SyntaxError(
+                f"Illegal character '{char}' at line {self.line_number}"
+            )

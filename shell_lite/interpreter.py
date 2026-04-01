@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Callable
 from .ast_nodes import *
 from .lexer import Token, Lexer
-from .parser import Parser
+from .parser_gbp import GeometricBindingParser
 import importlib
 import types
 import operator
@@ -36,6 +36,10 @@ try:
 except ImportError:
     pass
 class Environment:
+    """
+    -----Purpose: Represents the variable and constant binding environment at a
+                  specific scope level during execution.
+    """
     def __init__(self, parent=None):
         self.variables: Dict[str, Any] = {}
         self.constants: set = set()
@@ -69,6 +73,9 @@ class ShellLiteError(Exception):
         self.message = message
         super().__init__(message)
 class LambdaFunction:
+    """
+    -----Purpose: Encapsulates an anonymous function with lexical closure support.
+    """
     def __init__(self, params: List[str], body, interpreter):
         self.params = params
         self.body = body
@@ -88,10 +95,16 @@ class LambdaFunction:
             self.interpreter.current_env = old_env
         return result
 class Instance:
+    """
+    -----Purpose: Represents an instantiated struct/class with bounded data.
+    """
     def __init__(self, class_def: ClassDef):
         self.class_def = class_def
         self.data: Dict[str, Any] = {}
 class Tag:
+    """
+    -----Purpose: A node representation to build DSL tree structures (like HTML).
+    """
     def __init__(self, name: str, attrs: Dict[str, Any] = None):
         self.name = name
         self.attrs = attrs or {}
@@ -112,6 +125,9 @@ class Tag:
             return f"<{self.name}{attr_str} />"
         return f"<{self.name}{attr_str}>{inner}</{self.name}>"
 class WebBuilder:
+    """
+    -----Purpose: Manages a stack of Tags to sequentially build declarative Web UI.
+    """
     def __init__(self, interpreter):
         self.stack: List[Tag] = []
         self.interpreter = interpreter
@@ -128,6 +144,9 @@ class WebBuilder:
         else:
             pass
 class Interpreter:
+    """
+    -----Purpose: The core tree-walking interpreter that executes AST nodes.
+    """
     def __init__(self):
         self.global_env = Environment()
         self.global_env.set('str', str)
@@ -391,25 +410,46 @@ class Interpreter:
     def generic_visit(self, node: Node):
         raise Exception(f'No visit_{type(node).__name__} method')
     def visit_Number(self, node: Number):
+        """
+        -----Purpose: Returns the value of a numeric literal node.
+        """
         return node.value
     def visit_String(self, node: String):
+        """
+        -----Purpose: Returns the value of a string literal node.
+        """
         return node.value
     def visit_Boolean(self, node: Boolean):
+        """
+        -----Purpose: Returns the value of a boolean literal node.
+        """
         return node.value
     def visit_ListVal(self, node: ListVal):
+        """
+        -----Purpose: Evaluates a list literal, including spread operations.
+        """
         result = []
         for e in node.elements:
             if isinstance(e, Spread):
                 spread_val = self.visit(e.value)
                 if not isinstance(spread_val, list):
-                    raise TypeError(f"Spread operator requires a list, got {type(spread_val).__name__}")
+                    raise TypeError(
+                        f"Spread operator requires a list, "
+                        f"got {type(spread_val).__name__}"
+                    )
                 result.extend(spread_val)
             else:
                 result.append(self.visit(e))
         return result
     def visit_Dictionary(self, node: Dictionary):
+        """
+        -----Purpose: Evaluates a dictionary literal.
+        """
         return {self.visit(k): self.visit(v) for k, v in node.pairs}
     def visit_PropertyAssign(self, node: PropertyAssign):
+        """
+        -----Purpose: Assigns a value to an object or dictionary property.
+        """
         instance = self.current_env.get(node.instance_name)
         val = self.visit(node.value)
         if isinstance(instance, Instance):
@@ -419,8 +459,14 @@ class Interpreter:
             instance[node.property_name] = val
             return val
         else:
-             raise TypeError(f"Cannot assign property '{node.property_name}' of non-object '{node.instance_name}'")
+            raise TypeError(
+                f"Cannot assign property '{node.property_name}' "
+                f"of non-object '{node.instance_name}'"
+            )
     def visit_VarAccess(self, node: VarAccess):
+        """
+        -----Purpose: Retrieves the value of a variable or builtin function.
+        """
         try:
             return self.current_env.get(node.name)
         except NameError:
@@ -433,10 +479,16 @@ class Interpreter:
                 return self.visit_Call(Call(node.name, []))
             raise
     def visit_Assign(self, node: Assign):
+        """
+        -----Purpose: Assigns a value to a variable in the current environment.
+        """
         value = self.visit(node.value)
         self.current_env.set(node.name, value)
         return value
     def visit_BinOp(self, node: BinOp):
+        """
+        -----Purpose: Evaluates a binary operation between two nodes.
+        """
         left = self.visit(node.left)
         right = self.visit(node.right)
         if node.op == '+':
@@ -476,6 +528,9 @@ class Interpreter:
             return bool(re.search(str(pattern), str(left)))
         raise Exception(f"Unknown operator: {node.op}")
     def visit_Print(self, node: Print):
+        """
+        -----Purpose: Evaluates and prints a expression with optional styling.
+        """
         value = self.visit(node.expression)
         if node.color or node.style:
             colors = {
@@ -494,6 +549,9 @@ class Interpreter:
         print(value, flush=True)
         return value
     def visit_If(self, node: If):
+        """
+        -----Purpose: Evaluates an if/elif/else conditional branch.
+        """
         condition = self.visit(node.condition)
         if condition:
             for stmt in node.body:
@@ -502,9 +560,14 @@ class Interpreter:
             for stmt in node.else_body:
                 self.visit(stmt)
     def visit_For(self, node: For):
+        """
+        -----Purpose: Evaluates a numeric for loop.
+        """
         count = self.visit(node.count)
         if not isinstance(count, int):
-            raise TypeError(f"Loop count must be an integer, got {type(count)}")
+            raise TypeError(
+                f"Loop count must be an integer, got {type(count)}"
+            )
         for _ in range(count):
             try:
                 for stmt in node.body:
@@ -516,10 +579,16 @@ class Interpreter:
             except ReturnException:
                 raise
     def visit_Input(self, node: Input):
+        """
+        -----Purpose: Prompts the user for input.
+        """
         if node.prompt:
             return input(node.prompt)
         return input()
     def visit_While(self, node: While):
+        """
+        -----Purpose: Evaluates a while loop until the condition is false.
+        """
         while self.visit(node.condition):
             try:
                 for stmt in node.body:
@@ -531,6 +600,9 @@ class Interpreter:
             except ReturnException:
                 raise
     def visit_Try(self, node: Try):
+        """
+        -----Purpose: Evaluates a try-catch block for local error handling.
+        """
         try:
             for stmt in node.try_body:
                 self.visit(stmt)
@@ -542,6 +614,9 @@ class Interpreter:
             for stmt in node.catch_body:
                 self.visit(stmt)
     def visit_TryAlways(self, node: TryAlways):
+        """
+        -----Purpose: Evaluates a try-catch-always block.
+        """
         try:
             try:
                 for stmt in node.try_body:
@@ -561,12 +636,27 @@ class Interpreter:
         if node.op == 'not':
             return not val
         raise Exception(f"Unknown unary operator: {node.op}")
+    def visit_Throw(self, node: Throw):
+        """
+        -----Purpose: Throws a runtime error with a custom message.
+        """
+        message = self.visit(node.message)
+        raise RuntimeError(message)
     def visit_FunctionDef(self, node: FunctionDef):
+        """
+        -----Purpose: Stores a function definition in the interpreter state.
+        """
         self.functions[node.name] = node
     def visit_Return(self, node: Return):
+        """
+        -----Purpose: Evaluates a return expression and raises a ReturnException.
+        """
         value = self.visit(node.value)
         raise ReturnException(value)
     def _call_function_def(self, func_def: FunctionDef, args: List[Node]):
+        """
+        -----Purpose: Internal helper to execute a function definition.
+        """
         if len(args) > len(func_def.args):
              raise TypeError(f"Function '{func_def.name}' expects max {len(func_def.args)} arguments, got {len(args)}")
         old_env = self.current_env
@@ -593,6 +683,9 @@ class Interpreter:
             self.current_env = old_env
         return ret_val
     def visit_Call(self, node: Call):
+        """
+        -----Purpose: Evaluates a function or method call node.
+        """
         kwargs = {}
         if node.kwargs:
             for k, v in node.kwargs:
@@ -622,7 +715,11 @@ class Interpreter:
                     return func(*args, **kwargs)
                 return func(*args)
             curr_obj = func
-            if (isinstance(curr_obj, (list, dict, str)) or isinstance(curr_obj, Instance)):
+            # Refactor long condition for 80-char compliance
+            is_valid_type = isinstance(
+                curr_obj, (list, dict, str, Instance)
+            )
+            if is_valid_type:
                 valid_chain = True
                 for arg_node in node.args:
                     val = self.visit(arg_node)
@@ -633,7 +730,8 @@ class Interpreter:
                         except (IndexError, KeyError) as e:
                             raise RuntimeError(f"Index/Key error: {e}")
                         except TypeError:
-                             valid_chain = False; break
+                             valid_chain = False
+                             break
                     else:
                         valid_chain = False
                         break
@@ -645,12 +743,22 @@ class Interpreter:
         except NameError:
             pass
         if node.name not in self.functions:
-            raise NameError(f"Function '{node.name}' not defined (and not a variable).")
+            msg = (
+                f"Function '{node.name}' not defined "
+                "(and not a variable)."
+            )
+            raise NameError(msg)
         func_def = self.functions[node.name]
         return self._call_function_def(func_def, node.args)
     def visit_ClassDef(self, node: ClassDef):
+        """
+        -----Purpose: Stores a class definition in the interpreter state.
+        """
         self.classes[node.name] = node
     def visit_Instantiation(self, node: Instantiation):
+        """
+        -----Purpose: Creates a new instance of a structure/class.
+        """
         if node.class_name not in self.classes:
             raise NameError(f"Class '{node.class_name}' not defined.")
         class_def = self.classes[node.class_name]
@@ -660,7 +768,11 @@ class Interpreter:
             if default_val is None:
                 required_count += 1
         if len(node.args) < required_count:
-             raise TypeError(f"Structure '{node.class_name}' expects at least {required_count} args, got {len(node.args)}")
+             msg = (
+                 f"Structure '{node.class_name}' expects at "
+                 f"least {required_count} args, got {len(node.args)}"
+             )
+             raise TypeError(msg)
         instance = Instance(class_def)
         for i, (prop_name, default_val) in enumerate(all_properties):
             val = None
@@ -669,15 +781,26 @@ class Interpreter:
             elif default_val is not None:
                 val = self.visit(default_val)
             else:
-                raise TypeError(f"Missing argument for property '{prop_name}' in '{node.class_name}'")
+                msg = (
+                    f"Missing argument for property '{prop_name}' "
+                    f"in '{node.class_name}'"
+                )
+                raise TypeError(msg)
             instance.data[prop_name] = val
         self.current_env.set(node.var_name, instance)
         return instance
     def visit_MethodCall(self, node: MethodCall):
+        """
+        -----Purpose: Executes a method call on a structure instance.
+        """
         instance = self.current_env.get(node.instance_name)
         if isinstance(instance, dict):
             if node.method_name not in instance:
-                raise AttributeError(f"Module '{node.instance_name}' has no method '{node.method_name}'")
+                msg = (
+                    f"Module '{node.instance_name}' has no "
+                    f"method '{node.method_name}'"
+                )
+                raise AttributeError(msg)
             method = instance[node.method_name]
             if isinstance(method, FunctionDef):
                  return self._call_function_def(method, node.args)
@@ -699,12 +822,18 @@ class Interpreter:
                         except (IndexError, KeyError) as e:
                             raise RuntimeError(f"Index/Key error: {e}")
                         except TypeError:
-                             valid_chain = False; break
+                             valid_chain = False
+                             break
                     else:
-                        valid_chain = False; break
+                        valid_chain = False
+                        break
                  if valid_chain:
                      return curr_obj
-                 raise TypeError(f"Property '{node.method_name}' is not callable and index access failed.")
+                 msg = (
+                     f"Property '{node.method_name}' is not callable "
+                     "and index access failed."
+                 )
+                 raise TypeError(msg)
             else:
                  raise TypeError(f"Property '{node.method_name}' is not callable.")
         if hasattr(instance, node.method_name) and callable(getattr(instance, node.method_name)):
@@ -744,6 +873,9 @@ class Interpreter:
             self.current_env = old_env
         return ret_val
     def visit_PropertyAccess(self, node: PropertyAccess):
+        """
+        -----Purpose: Evaluates an access to an object or dictionary property.
+        """
         instance = self.current_env.get(node.instance_name)
         if isinstance(instance, Instance):
             if node.property_name not in instance.data:
@@ -761,8 +893,16 @@ class Interpreter:
                  return len(instance)
         if hasattr(instance, node.property_name):
              return getattr(instance, node.property_name)
-        raise TypeError(f"Object '{node.instance_name}' (type {type(instance).__name__}) has no property '{node.property_name}'")
+        msg = (
+            f"Object '{node.instance_name}' (type "
+            f"{type(instance).__name__}) has no property "
+            f"'{node.property_name}'"
+        )
+        raise TypeError(msg)
     def visit_Import(self, node: Import):
+        """
+        -----Purpose: Handles importing of ShellLite or Python modules.
+        """
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
@@ -773,7 +913,9 @@ class Interpreter:
              target_path = node.path
         else:
              home = os.path.expanduser("~")
-             global_path = os.path.join(home, ".shell_lite", "modules", node.path)
+             global_path = os.path.join(
+                 home, ".shell_lite", "modules", node.path
+             )
              if os.path.exists(global_path):
                  target_path = global_path
              else:
@@ -797,10 +939,10 @@ class Interpreter:
             except FileNotFoundError:
                 raise FileNotFoundError(f"Could not find imported file: {node.path}")
             from .lexer import Lexer
-            from .parser import Parser
+            from .parser_gbp import GeometricBindingParser
             lexer = Lexer(code)
             tokens = lexer.tokenize()
-            parser = Parser(tokens)
+            parser = GeometricBindingParser(tokens)
             statements = parser.parse()
             for stmt in statements:
                 self.visit(stmt)
@@ -811,8 +953,16 @@ class Interpreter:
             return
         except ImportError:
             pass
-        raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\n - ShellLite Local/Global\n - Python Site-Packages (The Bridge)")
+        msg = (
+            f"Could not find module '{node.path}'. Searched:\n"
+            " - ShellLite Local/Global\n"
+            " - Python Site-Packages (The Bridge)"
+        )
+        raise FileNotFoundError(msg)
     def _get_class_properties(self, class_def: ClassDef) -> List[tuple[str, Optional[Node]]]:
+        """
+        -----Purpose: Recursive helper to retrieve all properties of a class.
+        """
         if not hasattr(class_def, 'properties'): return []
         props = []
         for p in class_def.properties:
@@ -827,6 +977,9 @@ class Interpreter:
             return self._get_class_properties(parent_def) + props
         return props
     def _find_method(self, class_def: ClassDef, method_name: str) -> Optional[FunctionDef]:
+        """
+        -----Purpose: Recursive helper to find a method in a class hierarchy.
+        """
         for m in class_def.methods:
             if m.name == method_name:
                 return m
@@ -837,6 +990,9 @@ class Interpreter:
              return self._find_method(parent_def, method_name)
         return None
     def builtin_run(self, cmd):
+        """
+        -----Purpose: Executes a system command and returns its output.
+        """
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if result.returncode != 0:
@@ -845,12 +1001,18 @@ class Interpreter:
         except Exception as e:
             raise RuntimeError(f"Failed to run command: {e}")
     def builtin_read(self, path):
+        """
+        -----Purpose: Reads the content of a file from the filesystem.
+        """
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 return f.read()
         except Exception as e:
             raise RuntimeError(f"Failed to read file '{path}': {e}")
     def builtin_write(self, path, content):
+        """
+        -----Purpose: Writes content to a file on the filesystem.
+        """
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(str(content))
@@ -858,11 +1020,17 @@ class Interpreter:
         except Exception as e:
             raise RuntimeError(f"Failed to write file '{path}': {e}")
     def builtin_json_parse(self, json_str):
+        """
+        -----Purpose: Parses a JSON string into a ShellLite object/list.
+        """
         try:
             return json.loads(json_str)
         except Exception as e:
             raise RuntimeError(f"Invalid JSON: {e}")
     def builtin_json_stringify(self, obj):
+        """
+        -----Purpose: Converts a ShellLite object/list into a JSON string.
+        """
         try:
             if isinstance(obj, Instance):
                 return json.dumps(obj.data)
@@ -870,12 +1038,18 @@ class Interpreter:
         except Exception as e:
             raise RuntimeError(f"JSON stringify failed: {e}")
     def builtin_http_get(self, url):
+        """
+        -----Purpose: Performs a synchronous HTTP GET request.
+        """
         try:
             with urllib.request.urlopen(url) as response:
                 return response.read().decode('utf-8')
         except Exception as e:
             raise RuntimeError(f"HTTP GET failed for '{url}': {e}")
     def builtin_http_post(self, url, data_dict):
+        """
+        -----Purpose: Performs a synchronous HTTP POST request with JSON data.
+        """
         try:
             if isinstance(data_dict, Instance):
                 data_dict = data_dict.data
@@ -886,17 +1060,27 @@ class Interpreter:
         except Exception as e:
             raise RuntimeError(f"HTTP POST failed for '{url}': {e}")
     def visit_Lambda(self, node: Lambda):
+        """
+        -----Purpose: Evaluates a lambda expression into a callable.
+        """
         return LambdaFunction(node.params, node.body, self)
     def visit_Ternary(self, node: Ternary):
+        """
+        -----Purpose: Evaluates a ternary conditional expression.
+        """
         condition = self.visit(node.condition)
         if condition:
             return self.visit(node.true_expr)
         else:
             return self.visit(node.false_expr)
     def visit_ListComprehension(self, node: ListComprehension):
+        """
+        -----Purpose: Evaluates a list comprehension expression.
+        """
         iterable = self.visit(node.iterable)
         if not hasattr(iterable, '__iter__'):
-            raise TypeError(f"Cannot iterate over {type(iterable).__name__}")
+            msg = f"Cannot iterate over {type(iterable).__name__}"
+            raise TypeError(msg)
         result = []
         old_env = self.current_env
         new_env = Environment(parent=self.current_env)
@@ -912,8 +1096,14 @@ class Interpreter:
             self.current_env = old_env
         return result
     def visit_Spread(self, node: Spread):
+        """
+        -----Purpose: Returns the value of a spread operation target.
+        """
         return self.visit(node.value)
     def visit_Alert(self, node: Alert):
+        """
+        -----Purpose: Displays a GUI alert message box.
+        """
         msg = self.visit(node.message)
         root = tk.Tk()
         root.withdraw()
@@ -921,6 +1111,9 @@ class Interpreter:
         messagebox.showinfo("Alert", str(msg))
         root.destroy()
     def visit_Prompt(self, node: Prompt):
+        """
+        -----Purpose: Displays a GUI text input dialog.
+        """
         prompt = self.visit(node.prompt)
         root = tk.Tk()
         root.withdraw()
@@ -929,6 +1122,9 @@ class Interpreter:
         root.destroy()
         return val if val is not None else ""
     def visit_Confirm(self, node: Confirm):
+        """
+        -----Purpose: Displays a GUI yes/no confirmation dialog.
+        """
         prompt = self.visit(node.prompt)
         root = tk.Tk()
         root.withdraw()
@@ -937,17 +1133,30 @@ class Interpreter:
         root.destroy()
         return val
     def visit_Spawn(self, node: Spawn):
+        """
+        -----Purpose: Spawns a background task in a thread pool.
+        """
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         future = executor.submit(self.visit, node.call)
         return future
     def visit_Await(self, node: Await):
+        """
+        -----Purpose: Awaits the result of an asynchronous task.
+        """
         task = self.visit(node.task)
         if isinstance(task, concurrent.futures.Future):
             return task.result()
-        raise TypeError(f"Cannot await non-task object: {type(task)}")
+        msg = f"Cannot await non-task object: {type(task)}"
+        raise TypeError(msg)
     def visit_Regex(self, node: Regex):
+        """
+        -----Purpose: Compiles and returns a regular expression object.
+        """
         return re.compile(node.pattern)
     def visit_FileWatcher(self, node: FileWatcher):
+        """
+        -----Purpose: Monitors a file for changes and executes a block.
+        """
         path = self.visit(node.path)
         if not os.path.exists(path):
             print(f"Warning: Watching non-existent file {path}")
@@ -1000,46 +1209,86 @@ class Interpreter:
         finally:
             self.current_env = old_env
     def visit_IndexAccess(self, node: IndexAccess):
+        """
+        -----Purpose: Evaluates an index or key access on a collection.
+        """
         obj = self.visit(node.obj)
         index = self.visit(node.index)
         if isinstance(obj, list):
             if not isinstance(index, int):
-                raise TypeError(f"List indices must be integers, got {type(index).__name__}")
+                msg = (
+                    f"List indices must be integers, "
+                    f"got {type(index).__name__}"
+                )
+                raise TypeError(msg)
             return obj[index]
         elif isinstance(obj, dict):
             return obj[index]
         elif isinstance(obj, str):
             if not isinstance(index, int):
-                raise TypeError(f"String indices must be integers, got {type(index).__name__}")
+                msg = (
+                    f"String indices must be integers, "
+                    f"got {type(index).__name__}"
+                )
+                raise TypeError(msg)
             return obj[index]
         else:
-            raise TypeError(f"'{type(obj).__name__}' object is not subscriptable")
+            msg = f"'{type(obj).__name__}' object is not subscriptable"
+            raise TypeError(msg)
     def visit_Stop(self, node: Stop):
+        """
+        -----Purpose: Raises a StopException to break out of a loop.
+        """
         raise StopException()
     def visit_Skip(self, node: Skip):
+        """
+        -----Purpose: Raises a SkipException to continue a loop.
+        """
         raise SkipException()
     def visit_PythonImport(self, node: PythonImport):
+        """
+        -----Purpose: Imports a raw Python module into the global environment.
+        """
         try:
             mod = importlib.import_module(node.module_name)
             name = node.alias if node.alias else node.module_name.split('.')[0]
             self.global_env.set(name, mod)
         except ImportError as e:
-            raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
+            msg = (
+                f"Could not import python module '{node.module_name}': {e}"
+            )
+            raise RuntimeError(msg)
     def visit_FromImport(self, node: FromImport):
+        """
+        -----Purpose: Imports specific attributes from a Python module.
+        """
         try:
             mod = importlib.import_module(node.module_name)
             for name, alias in node.names:
                 if not hasattr(mod, name):
-                    raise AttributeError(f"Module '{node.module_name}' has no attribute '{name}'")
+                    msg = (
+                        f"Module '{node.module_name}' has no "
+                        f"attribute '{name}'"
+                    )
+                    raise AttributeError(msg)
                 val = getattr(mod, name)
                 target_name = alias if alias else name
                 self.global_env.set(target_name, val)
         except ImportError as e:
-            raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
+            msg = (
+                f"Could not import python module '{node.module_name}': {e}"
+            )
+            raise RuntimeError(msg)
     def visit_Throw(self, node: Throw):
+        """
+        -----Purpose: Throws a ShellLite-specific runtime error.
+        """
         message = self.visit(node.message)
         raise ShellLiteError(str(message))
     def visit_Unless(self, node: Unless):
+        """
+        -----Purpose: Evaluates an unless block (inverse of if).
+        """
         condition = self.visit(node.condition)
         if not condition:
             for stmt in node.body:
@@ -1048,6 +1297,9 @@ class Interpreter:
             for stmt in node.else_body:
                 self.visit(stmt)
     def visit_Until(self, node: Until):
+        """
+        -----Purpose: Evaluates an until loop (inverse of while).
+        """
         while not self.visit(node.condition):
             try:
                 for stmt in node.body:
@@ -1059,9 +1311,16 @@ class Interpreter:
             except ReturnException:
                 raise
     def visit_Repeat(self, node: Repeat):
+        """
+        -----Purpose: Evaluates a repeat loop with automatic index variable.
+        """
         count = self.visit(node.count)
         if not isinstance(count, int):
-            raise TypeError(f"repeat count must be an integer, got {type(count).__name__}")
+            msg = (
+                f"repeat count must be an integer, "
+                f"got {type(count).__name__}"
+            )
+            raise TypeError(msg)
         old_env = self.current_env
         self.current_env = Environment(parent=self.current_env)
         try:
@@ -1079,6 +1338,9 @@ class Interpreter:
         finally:
             self.current_env = old_env
     def visit_When(self, node: When):
+        """
+        -----Purpose: Evaluates a pattern matching switch-like block.
+        """
         value = self.visit(node.value)
         for match_val, body in node.cases:
             if self.visit(match_val) == value:
@@ -1089,14 +1351,18 @@ class Interpreter:
             for stmt in node.otherwise:
                 self.visit(stmt)
     def visit_Execute(self, node: Execute):
+        """
+        -----Purpose: Runtime execution of code from a string.
+        """
         code = self.visit(node.code)
         if not isinstance(code, str):
-            raise TypeError(f"execute requires a string, got {type(code).__name__}")
+            msg = f"execute requires a string, got {type(code).__name__}"
+            raise TypeError(msg)
         from .lexer import Lexer
-        from .parser import Parser
+        from .parser_gbp import GeometricBindingParser
         lexer = Lexer(code)
         tokens = lexer.tokenize()
-        parser = Parser(tokens)
+        parser = GeometricBindingParser(tokens)
         statements = parser.parse()
         result = None
         for stmt in statements:
@@ -1146,10 +1412,10 @@ class Interpreter:
             with open(target_path, 'r', encoding='utf-8') as f:
                 code = f.read()
             from .lexer import Lexer
-            from .parser import Parser
+            from .parser_gbp import GeometricBindingParser
             lexer = Lexer(code)
             tokens = lexer.tokenize()
-            parser = Parser(tokens)
+            parser = GeometricBindingParser(tokens)
             statements = parser.parse()
             for stmt in statements:
                 self.visit(stmt)
@@ -1184,6 +1450,9 @@ class Interpreter:
             sys.exit(int(code))
         sys.exit(0)
     def visit_App(self, node: App):
+        """
+        -----Purpose: Initializes and runs a Tkinter-based GUI application.
+        """
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk()
@@ -1200,7 +1469,14 @@ class Interpreter:
             self.ui_parent_stack.pop()
         root.mainloop()
     def visit_Layout(self, node: Layout):
-        parent = self.ui_parent_stack[-1]
+        """
+        -----Purpose: Creates a UI layout frame and manages child placement.
+        """
+        parent_ctx = self.ui_parent_stack[-1]
+        if isinstance(parent_ctx, tuple):
+            parent = parent_ctx[0]
+        else:
+            parent = parent_ctx
         frame = tk.Frame(parent)
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.ui_parent_stack.append((frame, node.layout_type))
@@ -1210,6 +1486,9 @@ class Interpreter:
         finally:
             self.ui_parent_stack.pop()
     def visit_Widget(self, node: Widget):
+        """
+        -----Purpose: Creates and renders a UI widget (button, input, etc.).
+        """
         from tkinter import messagebox
         parent_ctx = self.ui_parent_stack[-1]
         if isinstance(parent_ctx, tuple):
@@ -1229,7 +1508,10 @@ class Interpreter:
             widget = tk.Button(parent, text=node.label, command=on_click)
         elif node.widget_type == 'input':
             lbl = tk.Label(parent, text=node.label)
-            pack_opts = {'side': tk.TOP, 'anchor': 'w'} if layout_mode == 'column' else {'side': tk.LEFT}
+            if layout_mode == 'column':
+                pack_opts = {'side': tk.TOP, 'anchor': 'w'}
+            else:
+                pack_opts = {'side': tk.LEFT}
             lbl.pack(**pack_opts)
             widget = tk.Entry(parent)
             if node.var_name:
@@ -1241,7 +1523,8 @@ class Interpreter:
                     def text(self): return self.w.get()
                 self.current_env.set(node.var_name, InputWrapper(widget))
         elif node.widget_type == 'heading':
-            widget = tk.Label(parent, text=node.label, font=("Helvetica", 16, "bold"))
+            font_cfg = ("Helvetica", 16, "bold")
+            widget = tk.Label(parent, text=node.label, font=font_cfg)
         elif node.widget_type == 'text':
             widget = tk.Label(parent, text=node.label)
         if widget:
@@ -1250,6 +1533,9 @@ class Interpreter:
             else:
                 widget.pack(side=tk.LEFT, padx=5)
     def visit_Make(self, node: Make):
+        """
+        -----Purpose: Creates an instance of a structure (alternative syntax).
+        """
         if node.class_name not in self.classes:
             raise NameError(f"Thing '{node.class_name}' not defined.")
         class_def = self.classes[node.class_name]
@@ -1259,7 +1545,11 @@ class Interpreter:
             if default_val is None:
                 required_count += 1
         if len(node.args) < required_count:
-             raise TypeError(f"Thing '{node.class_name}' expects at least {required_count} values, got {len(node.args)}")
+             msg = (
+                 f"Thing '{node.class_name}' expects at "
+                 f"least {required_count} values, got {len(node.args)}"
+             )
+             raise TypeError(msg)
         instance = Instance(class_def)
         for i, (prop_name, default_val) in enumerate(props):
             val = None
@@ -1268,10 +1558,17 @@ class Interpreter:
             elif default_val is not None:
                 val = self.visit(default_val)
             else:
-                raise TypeError(f"Missing argument for property '{prop_name}' in '{node.class_name}'")
+                msg = (
+                    f"Missing argument for property '{prop_name}' "
+                    f"in '{node.class_name}'"
+                )
+                raise TypeError(msg)
             instance.data[prop_name] = val
         return instance
     def visit_Convert(self, node: Convert):
+        """
+        -----Purpose: Converts data between different formats (e.g., JSON).
+        """
         val = self.visit(node.expression)
         if node.target_format.lower() == 'json':
              if isinstance(val, str):
@@ -1283,13 +1580,17 @@ class Interpreter:
                  if isinstance(val, Instance):
                      return json.dumps(val.data)
                  return json.dumps(val)
-        raise ValueError(f"Unknown conversion format: {node.target_format}")
+        msg = f"Unknown conversion format: {node.target_format}"
+        raise ValueError(msg)
     def visit_ProgressLoop(self, node: ProgressLoop):
+        """
+        -----Purpose: Displays a progress bar for a loop execution.
+        """
         loop = node.loop_node
         if isinstance(loop, Repeat):
              count = self.visit(loop.count)
              if not isinstance(count, int): count = 0
-             print(f"Progress: [                    ] 0%", end='\r')
+             print("Progress: [                    ] 0%", end='\r')
              for i in range(count):
                  percent = int((i / count) * 100)
                  bar = '=' * int(percent / 5)
@@ -1297,7 +1598,8 @@ class Interpreter:
                  try:
                      for stmt in loop.body:
                          self.visit(stmt)
-                 except: pass
+                 except: 
+                     pass
              print(f"Progress: [{'='*20}] 100%           ")
         elif isinstance(loop, For):
              count = self.visit(loop.count)
@@ -1308,7 +1610,8 @@ class Interpreter:
                  try:
                     for stmt in loop.body:
                         self.visit(stmt)
-                 except: pass
+                 except: 
+                     pass
              print(f"Progress: [{'='*20}] 100%           ")
         elif isinstance(loop, ForIn):
             iterable = self.visit(loop.iterable)
@@ -1323,11 +1626,15 @@ class Interpreter:
                 try:
                     for stmt in loop.body:
                         self.visit(stmt)
-                except: pass
+                except: 
+                    pass
                 i += 1
             if total > 0:
                 print(f"Progress: [{'='*20}] 100%           ")
     def visit_DatabaseOp(self, node: DatabaseOp):
+        """
+        -----Purpose: Performs database operations (open, query, etc.).
+        """
         if node.op == 'open':
             path = self.visit(node.args[0])
             self.db_conn = sqlite3.connect(path, check_same_thread=False)
@@ -1347,49 +1654,73 @@ class Interpreter:
             return cursor.lastrowid
         elif node.op == 'query':
             if not self.db_conn:
-                raise RuntimeError("Database not open. Use 'db open \"path\"' first.")
+                msg = "Database not open. Use 'db open \"path\"' first."
+                raise RuntimeError(msg)
             sql = self.visit(node.args[0])
             params = [self.visit(arg) for arg in node.args[1:]]
             cursor = self.db_conn.cursor()
             cursor.execute(sql, params)
-            columns = [description[0] for description in cursor.description] if cursor.description else []
+            desc = cursor.description
+            columns = [d[0] for d in desc] if desc else []
             rows = cursor.fetchall()
             result = []
             for row in rows:
                 result.append(dict(zip(columns, row)))
             return result
     def visit_ServeStatic(self, node: ServeStatic):
+        """
+        -----Purpose: Registers a folder to serve static files over HTTP.
+        """
         folder = str(self.visit(node.folder))
         url_prefix = str(self.visit(node.url))
-        if not url_prefix.startswith('/'): url_prefix = '/' + url_prefix
+        if not url_prefix.startswith('/'):
+            url_prefix = '/' + url_prefix
         if not os.path.isdir(folder):
             print(f"Warning: Static folder '{folder}' does not exist.")
         self.static_routes[url_prefix] = folder
         print(f"Serving static files from '{folder}' at '{url_prefix}'")
     def visit_Every(self, node: Every):
+        """
+        -----Purpose: Executes a block periodically at a given interval.
+        """
         interval = self.visit(node.interval)
-        if node.unit == 'minutes': interval *= 60
+        if node.unit == 'minutes':
+            interval *= 60
         try:
             while True:
-                for stmt in node.body: self.visit(stmt)
+                for stmt in node.body:
+                    self.visit(stmt)
                 time.sleep(interval)
-        except KeyboardInterrupt: pass
+        except KeyboardInterrupt:
+            pass
     def visit_After(self, node: After):
+        """
+        -----Purpose: Executes a block once after a given delay.
+        """
         delay = self.visit(node.delay)
-        if node.unit == 'minutes': delay *= 60
+        if node.unit == 'minutes':
+            delay *= 60
         time.sleep(delay)
-        for stmt in node.body: self.visit(stmt)
+        for stmt in node.body:
+            self.visit(stmt)
     def visit_OnRequest(self, node: OnRequest):
+        """
+        -----Purpose: Registers an HTTP route handler with pattern matching.
+        """
         path_str = self.visit(node.path)
         if path_str == '__middleware__':
             self.middleware_routes.append(node.body)
             return
         regex_pattern = "^" + path_str + "$"
         if ':' in path_str:
-            regex_pattern = "^" + re.sub(r':(\w+)', r'(?P<\1>[^/]+)', path_str) + "$"
+            pattern = re.sub(r':(\w+)', r'(?P<\1>[^/]+)', path_str)
+            regex_pattern = "^" + pattern + "$"
         compiled = re.compile(regex_pattern)
         self.http_routes.append((path_str, compiled, node.body))
     def visit_Listen(self, node: Listen):
+        """
+        -----Purpose: Starts the built-in HTTP server on a specified port.
+        """
         port_val = self.visit(node.port)
         interpreter_ref = self
         class ReusableHTTPServer(ThreadingHTTPServer):
@@ -1398,7 +1729,10 @@ class Interpreter:
             def handle_error(self, request, client_address):
                 try:
                     _, exc, _ = sys.exc_info()
-                    if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+                    is_network_err = isinstance(
+                        exc, (ConnectionResetError, BrokenPipeError)
+                    )
+                    if is_network_err:
                         return
                 except:
                     pass
@@ -1523,7 +1857,9 @@ class Interpreter:
             self.db_conn.row_factory = lambda c, r: {col[0]: r[idx] for idx, col in enumerate(c.description)}
             return True
         elif node.op == 'close':
-            if self.db_conn: self.db_conn.close(); self.db_conn = None
+            if self.db_conn:
+                self.db_conn.close()
+                self.db_conn = None
             return True
         elif node.op == 'exec':
             if not self.db_conn: raise RuntimeError("Database not open")
@@ -1532,18 +1868,25 @@ class Interpreter:
             if len(node.args) > 1:
                 val = self.visit(node.args[1])
                 params = val if isinstance(val, list) else [val]
-            c = self.db_conn.cursor(); c.execute(sql, params); self.db_conn.commit()
+            c = self.db_conn.cursor()
+            c.execute(sql, params)
+            self.db_conn.commit()
             return c.lastrowid
         elif node.op == 'query':
-            if not self.db_conn: raise RuntimeError("Database not open")
+            if not self.db_conn:
+                raise RuntimeError("Database not open")
             sql = self.visit(node.args[0])
             params = []
             if len(node.args) > 1:
                 val = self.visit(node.args[1])
                 params = val if isinstance(val, list) else [val]
-            c = self.db_conn.cursor(); c.execute(sql, params)
+            c = self.db_conn.cursor()
+            c.execute(sql, params)
             return c.fetchall()
     def visit_Download(self, node: Download):
+        """
+        -----Purpose: Downloads a file from a URL to the local filesystem.
+        """
         url = self.visit(node.url)
         filename = url.split('/')[-1] or "downloaded_file"
         print(f"Downloading {filename}...")
@@ -1559,33 +1902,41 @@ class Interpreter:
         except Exception as e:
              print(f"Error: Download failed: {e}")
     def visit_ArchiveOp(self, node: ArchiveOp):
+        """
+        -----Purpose: Compresses or extracts ZIP archives.
+        """
         source = str(self.visit(node.source))
         target = str(self.visit(node.target))
         try:
             if node.op == 'compress':
-                 print(f"Compressing '{source}' to '{target}'...")
-                 if os.path.isfile(source):
-                     with zipfile.ZipFile(target, 'w') as zipf:
-                         zipf.write(source, arcname=os.path.basename(source))
-                 elif os.path.isdir(source):
-                     shutil.make_archive(target.replace('.zip',''), 'zip', source)
-                 else:
-                     print(f"Error: Source '{source}' does not exist.")
-                     return
-                 print("Compression complete.")
+                print(f"Compressing '{source}' to '{target}'...")
+                if os.path.isfile(source):
+                    with zipfile.ZipFile(target, 'w') as zipf:
+                        zipf.write(source, arcname=os.path.basename(source))
+                elif os.path.isdir(source):
+                    shutil.make_archive(
+                        target.replace('.zip', ''), 'zip', source
+                    )
+                else:
+                    print(f"Error: Source '{source}' does not exist.")
+                    return
+                print("Compression complete.")
             else:
-                 print(f"Extracting '{source}' to '{target}'...")
-                 if not os.path.exists(source):
-                      print(f"Error: Archive '{source}' does not exist.")
-                      return
-                 with zipfile.ZipFile(source, 'r') as zipf:
-                     zipf.extractall(target)
-                 print("Extraction complete.")
+                print(f"Extracting '{source}' to '{target}'...")
+                if not os.path.exists(source):
+                    print(f"Error: Archive '{source}' does not exist.")
+                    return
+                with zipfile.ZipFile(source, 'r') as zipf:
+                    zipf.extractall(target)
+                print("Extraction complete.")
         except zipfile.BadZipFile:
-             print(f"Error: '{source}' is not a valid zip file.")
+            print(f"Error: '{source}' is not a valid zip file.")
         except Exception as e:
-             print(f"Error: Archive operation failed: {e}")
+            print(f"Error: Archive operation failed: {e}")
     def visit_CsvOp(self, node: CsvOp):
+        """
+        -----Purpose: Reads or writes CSV files from/to collection nodes.
+        """
         path = self.visit(node.path)
         if node.op == 'load':
             with open(path, 'r', newline='') as f:
@@ -1594,19 +1945,22 @@ class Interpreter:
         else:
             data = self.visit(node.data)
             if not isinstance(data, list):
-                 data = [data]
-            if not data: return
+                data = [data]
+            if not data:
+                return
             rows = []
             for item in data:
-                 if isinstance(item, Instance):
-                     rows.append(item.data)
-                 elif isinstance(item, dict):
-                     rows.append(item)
-                 elif isinstance(item, dict):
-                     rows.append(item)
-                 else:
-                     print("Error: Only lists of objects/dictionaries can be saved to CSV.")
-                     return
+                if isinstance(item, Instance):
+                    rows.append(item.data)
+                elif isinstance(item, dict):
+                    rows.append(item)
+                else:
+                    msg = (
+                        "Error: Only lists of objects/dictionaries "
+                        "can be saved to CSV."
+                    )
+                    print(msg)
+                    return
             if rows:
                 try:
                     keys = rows[0].keys()
@@ -1618,29 +1972,43 @@ class Interpreter:
                 except Exception as e:
                     print(f"Error saving CSV: {e}")
     def visit_ClipboardOp(self, node: ClipboardOp):
+        """
+        -----Purpose: Accesses the system clipboard (copy/paste).
+        """
         if 'pyperclip' not in sys.modules:
-             raise RuntimeError("Install 'pyperclip' for clipboard support.")
+            msg = "Install 'pyperclip' for clipboard support."
+            raise RuntimeError(msg)
         if node.op == 'copy':
              content = str(self.visit(node.content))
              pyperclip.copy(content)
         else:
              return pyperclip.paste()
     def visit_AutomationOp(self, node: AutomationOp):
+        """
+        -----Purpose: Performs hardware automation tasks (keyboard, mouse).
+        """
         args = [self.visit(a) for a in node.args]
         if node.action == 'press':
-             if 'keyboard' not in sys.modules: raise RuntimeError("Install 'keyboard'")
+             if 'keyboard' not in sys.modules:
+                 raise RuntimeError("Install 'keyboard'")
              keyboard.press_and_release(args[0])
         elif node.action == 'type':
-             if 'keyboard' not in sys.modules: raise RuntimeError("Install 'keyboard'")
+             if 'keyboard' not in sys.modules:
+                 raise RuntimeError("Install 'keyboard'")
              keyboard.write(str(args[0]))
         elif node.action == 'click':
-             if 'mouse' not in sys.modules: raise RuntimeError("Install 'mouse'")
+             if 'mouse' not in sys.modules:
+                 raise RuntimeError("Install 'mouse'")
              mouse.move(args[0], args[1], absolute=True, duration=0.2)
              mouse.click('left')
         elif node.action == 'notify':
-             if 'plyer' not in sys.modules: raise RuntimeError("Install 'plyer'")
+             if 'plyer' not in sys.modules:
+                 raise RuntimeError("Install 'plyer'")
              notification.notify(title=str(args[0]), message=str(args[1]))
     def visit_DateOp(self, node: DateOp):
+        """
+        -----Purpose: Evaluates relative date strings (today, tomorrow, etc.).
+        """
         if node.expr == 'today':
             return datetime.now().strftime("%Y-%m-%d")
         today = datetime.now()
@@ -1663,6 +2031,9 @@ class Interpreter:
                  return d.strftime("%Y-%m-%d")
         return s
     def visit_FileWrite(self, node: FileWrite):
+        """
+        -----Purpose: Writes or appends content to a file.
+        """
         path = str(self.visit(node.path))
         content = str(self.visit(node.content))
         try:
@@ -1670,8 +2041,12 @@ class Interpreter:
                 f.write(content)
             print(f"{'Appended to' if node.mode == 'a' else 'Written to'} file '{path}'")
         except Exception as e:
-            raise RuntimeError(f"File operation failed: {e}")
+            msg = f"File operation failed: {e}"
+            raise RuntimeError(msg)
     def visit_FileRead(self, node: FileRead):
+        """
+        -----Purpose: Reads the entire content of a file.
+        """
         path = str(self.visit(node.path))
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -1680,13 +2055,18 @@ class Interpreter:
              raise FileNotFoundError(f"File '{path}' not found.")
              raise RuntimeError(f"Read failed: {e}")
     def _builtin_upper(self, s, only_letters=False):
+        """
+        -----Purpose: Builtin helper to convert string to uppercase.
+        """
         if not only_letters:
             return s.upper()
         if only_letters:
-             import re
              return re.sub(r'[^a-zA-Z\s]', '', s).upper()
         return s.upper()
     def _builtin_sum_range(self, start, end, condition=None):
+        """
+        -----Purpose: Builtin helper to sum a range with optional filtering.
+        """
         total = 0
         s = int(start)
         e = int(end)
@@ -1699,7 +2079,8 @@ class Interpreter:
                  else:
                      for k in range(2, int(i ** 0.5) + 1):
                          if i % k == 0:
-                             include = False; break
+                             include = False
+                             break
              elif condition == 'digits':
                   pass
              if include:
@@ -1718,7 +2099,8 @@ class Interpreter:
                  else:
                      for k in range(2, int(i ** 0.5) + 1):
                          if i % k == 0:
-                             include = False; break
+                             include = False
+                             break
              if include:
                  res.append(i)
         return res

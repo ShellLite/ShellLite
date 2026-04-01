@@ -4,7 +4,10 @@ from .lexer import Token
 from .ast_nodes import *
 @dataclass
 class GeoNode:
-    """Represents a topological node in the source code geometry."""
+    """
+    -----Purpose: Represents a topological node in the source code geometry.
+                  Stores indentation level and relationship to parent/children.
+    """
     head_token: Token
     line: int
     indent_level: int
@@ -14,6 +17,10 @@ class GeoNode:
     def __repr__(self):
         return f"GeoNode(line={self.line}, indent={self.indent_level}, head={self.head_token.type})"
 class GeometricBindingParser:
+    """
+    -----Purpose: Parses tokens topologically using indentation binding rules 
+                  rather than traditional recursive descent.
+    """
     def __init__(self, tokens: List[Token]):
         self.tokens = [t for t in tokens if t.type != 'COMMENT']
         self.root_nodes: List[GeoNode] = []
@@ -26,21 +33,78 @@ class GeometricBindingParser:
             'DOT': 9, 'LPAREN': 10, 'LBRACKET': 10
         }
     def parse(self) -> List[Node]:
-        """Main entry point."""
+        """
+        -----Purpose: Main entry point for Geometric Binding Parser. Orchestrates 
+                      the scan and semantic binding phases to produce an AST.
+        """
         self.topology_scan()
         ast_nodes = []
-        for geo_node in self.root_nodes:
+        i = 0
+        while i < len(self.root_nodes):
+            geo_node = self.root_nodes[i]
+            head_type = geo_node.head_token.type
+            if head_type == 'IF':
+                if_node = self.bind_if(geo_node)
+                j = i + 1
+                curr = if_node
+                while j < len(self.root_nodes):
+                    next_geo = self.root_nodes[j]
+                    if next_geo.head_token.type == 'ELIF':
+                        elif_node = self.bind_if(next_geo)
+                        curr.else_body = [elif_node]
+                        curr = elif_node
+                        j += 1
+                    elif next_geo.head_token.type == 'ELSE':
+                        curr.else_body = [
+                            self.bind_node(gc) for gc in next_geo.children
+                        ]
+                        j += 1
+                        break
+                    else:
+                        break
+                ast_nodes.append(if_node)
+                i = j
+                continue
+            if head_type == 'TRY':
+                try_body = [self.bind_node(gc) for gc in geo_node.children]
+                catch_body = []
+                catch_var = "e"
+                always_body = None
+                j = i + 1
+                while j < len(self.root_nodes):
+                    next_geo = self.root_nodes[j]
+                    if next_geo.head_token.type == 'CATCH':
+                        if len(next_geo.tokens) > 1:
+                            catch_var = next_geo.tokens[1].value
+                        catch_body = [
+                            self.bind_node(gc) for gc in next_geo.children
+                        ]
+                        j += 1
+                    elif next_geo.head_token.type == 'ALWAYS':
+                        always_body = [
+                            self.bind_node(gc) for gc in next_geo.children
+                        ]
+                        j += 1
+                    else:
+                        break
+                if always_body is not None:
+                    ast_nodes.append(
+                        TryAlways(try_body, catch_var, catch_body, always_body)
+                    )
+                else:
+                    ast_nodes.append(Try(try_body, catch_var, catch_body))
+                i = j
+                continue
             ast_node = self.bind_node(geo_node)
             if ast_node:
                 ast_nodes.append(ast_node)
+            i += 1
         return ast_nodes
     def topology_scan(self):
         """
-        Phase 1: Scans tokens to build GeoNodes.
-        Phase 2: Links them into a tree based on nesting.
+        -----Purpose: Scans tokens topologically to build GeoNodes and link 
+        -----        them into a tree based on indentation geometry.
         """
-        node_stack: List[GeoNode] = []
-        current_tokens_accumulator = []
         current_node: Optional[GeoNode] = None
         last_line_node: Optional[GeoNode] = None
         block_stack: List[GeoNode] = []
@@ -48,15 +112,15 @@ class GeometricBindingParser:
             if token.type == 'EOF':
                 break
             if token.type == 'INDENT':
-                parent_to_push = current_node if current_node else last_line_node
-                if parent_to_push:
-                     block_stack.append(parent_to_push)
+                p_push = current_node if current_node else last_line_node
+                if p_push:
+                    block_stack.append(p_push)
                 current_node = None
                 continue
             if token.type == 'DEDENT':
-                 if block_stack:
-                     block_stack.pop()
-                 continue
+                if block_stack:
+                    block_stack.pop()
+                continue
             if token.type == 'NEWLINE':
                 last_line_node = current_node
                 current_node = None
@@ -77,60 +141,162 @@ class GeometricBindingParser:
             else:
                 current_node.tokens.append(token)
     def bind_node(self, node: GeoNode) -> Node:
-        """Phase 2: Semantic Binding Dispatcher."""
+        """
+        -----Purpose: Semantic Binding Dispatcher. Converts a topological 
+        -----        GeoNode into a logical AST Node based on its head token.
+        """
         head_type = node.head_token.type
-        if head_type == 'IF':
-            return self.bind_if(node)
-        elif head_type == 'WHILE':
-            return self.bind_while(node)
-        elif head_type == 'FOR' or head_type == 'LOOP':
-            return self.bind_for(node)
-        elif head_type == 'USE':
-            return self.bind_use(node)
-        elif head_type == 'SERVE':
-            return self.bind_serve(node)
-        elif head_type == 'DEFINE':
-            return self.bind_define(node)
-        elif head_type == 'WHEN':
-            return self.bind_when(node)
-        elif head_type == 'ON':
-            return self.bind_on(node)
-        elif head_type == 'FUNCTION' or head_type == 'TO':
-             return self.bind_func(node)
-        elif head_type == 'PRINT' or head_type == 'SAY':
-            return self.bind_print(node)
-        elif head_type == 'RETURN':
-            return self.bind_return(node)
-        elif head_type == 'REPEAT':
-            return self.bind_repeat(node)
-        elif head_type == 'FOREVER':
-            return self.bind_forever(node)
-        elif head_type == 'START':
-            return self.bind_start(node)
-        elif head_type == 'LISTEN':
-            return self.bind_listen(node)
-        elif head_type == 'ID':
+        bind_map = {
+            'IF': self.bind_if, 'WHILE': self.bind_while,
+            'FOR': self.bind_for, 'LOOP': self.bind_for,
+            'USE': self.bind_use, 'SERVE': self.bind_serve,
+            'DEFINE': self.bind_define, 'STRUCTURE': self.bind_structure,
+            'WHEN': self.bind_when, 'DB': self.bind_db,
+            'TRY': self.bind_try, 'UNLESS': self.bind_unless,
+            'UNTIL': self.bind_until, 'ON': self.bind_on,
+            'FUNCTION': self.bind_func, 'TO': self.bind_func,
+            'PRINT': self.bind_print, 'SAY': self.bind_print,
+            'ALERT': self.bind_alert, 'PROMPT': self.bind_prompt,
+            'CONFIRM': self.bind_confirm, 'EXECUTE': self.bind_execute,
+            'EXIT': self.bind_exit, 'STOP': self.bind_stop,
+            'SKIP': self.bind_skip, 'ERROR': self.bind_error,
+            'SPAWN': self.bind_spawn, 'AWAIT': self.bind_await,
+            'EVERY': self.bind_every, 'AFTER': self.bind_after_in,
+            'IN': self.bind_after_in, 'WRITE': self.bind_file_op,
+            'APPEND': self.bind_file_op, 'READ': self.bind_file_op,
+            'COPY': self.bind_clipboard_op, 'PASTE': self.bind_clipboard_op,
+            'CLIPBOARD': self.bind_clipboard_op, 'CSV': self.bind_csv_op,
+            'COMPRESS': self.bind_archive_op, 'EXTRACT': self.bind_archive_op,
+            'PRESS': self.bind_automation, 'TYPE': self.bind_automation,
+            'CLICK': self.bind_automation, 'NOTIFY': self.bind_automation,
+            'DOWNLOAD': self.bind_download, 'APP': self.bind_app,
+            'IMPORT': self.bind_import_enhanced,
+            'FROM': self.bind_from_import,
+        }
+        
+        if head_type in bind_map:
+            return bind_map[head_type](node)
+            
+        if head_type == 'BEFORE' and len(node.tokens) > 1:
+            if node.tokens[1].type == 'REQUEST':
+                return self.bind_middleware(node)
+                
+        if head_type == 'ID':
+            val = node.head_token.value.lower()
+            if val == 'a' and len(node.tokens) > 1:
+                t1 = node.tokens[1].type
+                if t1 == 'LIST':
+                    return self.bind_natural_list(node)
+                if t1 == 'UNIQUE' and len(node.tokens) > 2:
+                    if node.tokens[2].type == 'SET':
+                        return self.bind_natural_set(node)
             if len(node.tokens) >= 2 and node.tokens[1].type == 'ASSIGN':
                 return self.bind_assignment(node)
             return self.bind_call_or_expr(node)
-        else:
-            return self.bind_call_or_expr(node)
+            
+        return self.bind_call_or_expr(node)
     def peek_type(self, node: GeoNode, offset: int) -> str:
         if offset < len(node.tokens):
             return node.tokens[offset].type
         return ""
     def bind_if(self, node: GeoNode) -> If:
+        """
+        -----Purpose: Binds an IF block GeoNode to an AST If node.
+        """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         condition = self.parse_expr_iterative(expr_tokens)
         body = [self.bind_node(child) for child in node.children]
-        else_body = None
-        return If(condition, body, else_body)
+        return If(condition, body, None)
+    def bind_unless(self, node: GeoNode) -> Unless:
+        """
+        -----Purpose: Binds an UNLESS block GeoNode to an AST Unless node.
+        """
+        expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
+        condition = self.parse_expr_iterative(expr_tokens)
+        body = [self.bind_node(child) for child in node.children]
+        return Unless(condition, body)
+    def bind_until(self, node: GeoNode) -> Until:
+        """
+        -----Purpose: Binds an UNTIL block GeoNode to an AST Until node.
+        """
+        expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
+        condition = self.parse_expr_iterative(expr_tokens)
+        body = [self.bind_node(child) for child in node.children]
+        return Until(condition, body)
+    def bind_try(self, node: GeoNode) -> Try:
+        # Dummy; handled by parse() grouping
+        return None
+    def bind_structure(self, node: GeoNode) -> ClassDef:
+        """
+        -----Purpose: Binds a STRUCTURE block GeoNode to an AST ClassDef node.
+        """
+        tokens = node.tokens
+        name = tokens[1].value
+        parent = None
+        if len(tokens) > 2:
+            if tokens[2].type == 'EXTENDS':
+                parent = tokens[3].value
+            elif tokens[2].type == 'LPAREN':
+                parent = tokens[3].value
+        properties = []
+        methods = []
+        for child in node.children:
+            head = child.head_token.type
+            if head == 'HAS' or head == 'ID':
+                start = 1 if head == 'HAS' else 0
+                prop_name = child.tokens[start].value
+                default_val = None
+                assign_idx = -1
+                for i, t in enumerate(child.tokens):
+                    if t.type == 'ASSIGN':
+                        assign_idx = i
+                        break
+                if assign_idx != -1:
+                    default_val = self.parse_expr_iterative(
+                        child.tokens[assign_idx + 1:]
+                    )
+                properties.append((prop_name, default_val))
+            elif head == 'TO' or head == 'FUNCTION':
+                methods.append(self.bind_func(child))
+        return ClassDef(name, properties, methods, parent)
+    def bind_db(self, node: GeoNode) -> DatabaseOp:
+        """
+        -----Purpose: Binds a DB block GeoNode to an AST DatabaseOp node.
+        """
+        tokens = node.tokens
+        op = 'open'
+        i = 1
+        if i < len(tokens):
+            t = tokens[i]
+            if t.type == 'OPEN':
+                i += 1
+            elif t.type == 'QUERY':
+                op = 'query'
+                i += 1
+            elif t.type == 'EXEC':
+                op = 'exec'
+                i += 1
+            elif t.type == 'CLOSE':
+                op = 'close'
+                i += 1
+        args = []
+        if op != 'close':
+            remaining = tokens[i:]
+            if remaining:
+                args.append(self.parse_expr_iterative(remaining))
+        return DatabaseOp(op, args)
     def bind_while(self, node: GeoNode) -> While:
+        """
+        -----Purpose: Binds a WHILE block GeoNode to an AST While node.
+        """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         condition = self.parse_expr_iterative(expr_tokens)
         body = [self.bind_node(child) for child in node.children]
         return While(condition, body)
     def bind_repeat(self, node: GeoNode) -> Repeat:
+        """
+        -----Purpose: Binds a REPEAT block GeoNode to an AST Repeat node.
+        """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         if expr_tokens and expr_tokens[-1].type == 'TIMES':
             expr_tokens.pop()
@@ -138,115 +304,363 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return Repeat(count, body)
     def bind_forever(self, node: GeoNode) -> Forever:
+        """
+        -----Purpose: Binds a FOREVER block GeoNode to an AST Forever node.
+        """
         body = [self.bind_node(child) for child in node.children]
         return Forever(body)
-    def bind_for(self, node: GeoNode) -> Node:
+    def bind_for(self, node: GeoNode) -> Optional[Node]:
+        """
+        -----Purpose: Binds a FOR-IN or LOOP block GeoNode to an AST ForIn or 
+        -----        Repeat node.
+        """
         if len(node.tokens) < 3:
-             return None
+            return None
         var_name = node.tokens[1].value
-        in_index = -1
+        in_idx = -1
         for i, t in enumerate(node.tokens):
             if t.type == 'IN':
-                in_index = i
+                in_idx = i
                 break
-        if in_index == -1:
-             if node.head_token.type == 'LOOP':
-                 if node.tokens[-1].type == 'TIMES':
-                     expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
-                     expr_tokens.pop()
-                     count = self.parse_expr_iterative(expr_tokens)
-                     body = [self.bind_node(child) for child in node.children]
-                     return Repeat(count, body)
-             return None
-        range_index = -1
-        for i, t in enumerate(node.tokens):
-            if t.type == 'RANGE':
-                range_index = i
-                break
-        if range_index != -1:
-             args_tokens = node.tokens[range_index+1:]
-             pass
-        iterable_tokens = self._extract_expr_tokens(node.tokens, start=in_index+1)
-        iterable = self.parse_expr_iterative(iterable_tokens)
-        body = [self.bind_node(child) for child in node.children]
-        if node.tokens[in_index+1].type == 'RANGE':
-             args_tokens = self._extract_expr_tokens(node.tokens, start=in_index+2)
-             range_args = []
-             k = 0
-             while k < len(args_tokens):
-                 if args_tokens[k].type in ('NUMBER', 'STRING', 'ID'):
-                     t = args_tokens[k]
-                     val = None
-                     if t.type == 'NUMBER':
-                         val = Number(int(t.value) if '.' not in t.value else float(t.value))
-                     elif t.type == 'STRING':
-                         val = String(t.value)
-                     elif t.type == 'ID':
-                         val = VarAccess(t.value)
-                     if val: range_args.append(val)
-                 k += 1
-             iterable = Call('range', range_args)
+        if in_idx == -1:
+            if node.head_token.type == 'LOOP':
+                if node.tokens[-1].type == 'TIMES':
+                    e_tokens = self._extract_expr_tokens(node.tokens, 1)
+                    e_tokens.pop()
+                    count = self.parse_expr_iterative(e_tokens)
+                    body = [self.bind_node(c) for c in node.children]
+                    return Repeat(count, body)
+            return None
+        iter_tokens = self._extract_expr_tokens(node.tokens, in_idx + 1)
+        iterable = self.parse_expr_iterative(iter_tokens)
+        body = [self.bind_node(c) for c in node.children]
+        if node.tokens[in_idx + 1].type == 'RANGE':
+            args_tokens = self._extract_expr_tokens(node.tokens, in_idx+2)
+            range_args = []
+            for t in args_tokens:
+                if t.type == 'NUMBER':
+                    val = Number(
+                        int(t.value) if '.' not in t.value else float(t.value)
+                    )
+                elif t.type == 'STRING':
+                    val = String(t.value)
+                elif t.type == 'ID':
+                    val = VarAccess(t.value)
+                else:
+                    msg = f"Invalid token '{t.value}' in range expression."
+                    raise SyntaxError(msg)
+                if val:
+                    range_args.append(val)
+            iterable = Call('range', range_args)
         return ForIn(var_name, iterable, body)
     def bind_print(self, node: GeoNode) -> Print:
+        """
+        -----Purpose: Binds a PRINT block GeoNode to an AST Print node.
+        """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         expr = self.parse_expr_iterative(expr_tokens)
         return Print(expr)
     def bind_return(self, node: GeoNode) -> Return:
+        """
+        -----Purpose: Binds a RETURN block GeoNode to an AST Return node.
+        """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         expr = self.parse_expr_iterative(expr_tokens)
         return Return(expr)
     def bind_assignment(self, node: GeoNode) -> Assign:
+        """
+        -----Purpose: Binds an Assignment GeoNode to an AST Assign node.
+        """
         assign_idx = -1
         for i, t in enumerate(node.tokens):
             if t.type == 'ASSIGN':
                 assign_idx = i
                 break
         name = node.tokens[0].value
-        expr_tokens = node.tokens[assign_idx+1:]
+        expr_tokens = node.tokens[assign_idx + 1:]
         value = self.parse_expr_iterative(expr_tokens)
         return Assign(name, value)
     def bind_expression_stmt(self, node: GeoNode) -> Any:
+        """
+        -----Purpose: Binds an expression GeoNode to an AST expression.
+        """
         return self.parse_expr_iterative(node.tokens)
     def bind_start(self, node: GeoNode) -> Listen:
+        """
+        -----Purpose: Binds a START block GeoNode (server startup).
+        """
         return Listen(Number(8080))
     def bind_listen(self, node: GeoNode) -> Listen:
+        """
+        -----Purpose: Binds a LISTEN block GeoNode to an AST Listen node.
+        """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         if expr_tokens and expr_tokens[0].type == 'PORT':
-             expr_tokens.pop(0)
+            expr_tokens.pop(0)
         port = self.parse_expr_iterative(expr_tokens)
         return Listen(port)
     def bind_func(self, node: GeoNode) -> FunctionDef:
+        """
+        -----Purpose: Binds a FUNCTION definition GeoNode to AST FunctionDef.
+        """
         start = 1
-        if node.tokens[0].type == 'DEFINE': start = 2
+        if node.tokens[0].type == 'DEFINE':
+            start = 2
         name = node.tokens[start].value
         args = []
         collecting_args = False
-        for t in node.tokens[start+1:]:
+        for t in node.tokens[start + 1:]:
             if t.type == 'USING':
                 collecting_args = True
                 continue
             if t.type == 'ID' and collecting_args:
                 args.append((t.value, None, None))
-            elif t.type == 'COLON': break
-            elif t.type == 'COMMA': continue
+            elif t.type == 'COLON':
+                break
+            elif t.type == 'COMMA':
+                continue
         body = [self.bind_node(child) for child in node.children]
         return FunctionDef(name, args, body)
-    def bind_use(self, node: GeoNode) -> Import:
-        for t in node.tokens:
-            if t.type == 'STRING':
-                return Import(t.value)
-        return Import(node.tokens[1].value if len(node.tokens) > 1 else '')
+    def bind_alert(self, node: GeoNode) -> Alert:
+        """
+        -----Purpose: Binds an ALERT block GeoNode to an AST Alert node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Alert(expr)
+    def bind_prompt(self, node: GeoNode) -> Prompt:
+        """
+        -----Purpose: Binds a PROMPT block GeoNode to an AST Prompt node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Prompt(expr)
+    def bind_confirm(self, node: GeoNode) -> Confirm:
+        """
+        -----Purpose: Binds a CONFIRM block GeoNode to an AST Confirm node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Confirm(expr)
+    def bind_execute(self, node: GeoNode) -> Execute:
+        """
+        -----Purpose: Binds an EXECUTE block GeoNode to an AST Execute node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Execute(expr)
+    def bind_exit(self, node: GeoNode) -> Exit:
+        """
+        -----Purpose: Binds an EXIT block GeoNode to an AST Exit node.
+        """
+        expr = None
+        if len(node.tokens) > 1:
+            expr = self.parse_expr_iterative(node.tokens[1:])
+        return Exit(expr)
+    def bind_stop(self, node: GeoNode) -> Stop:
+        """
+        -----Purpose: Binds a STOP block GeoNode to an AST Stop node.
+        """
+        return Stop()
+    def bind_skip(self, node: GeoNode) -> Skip:
+        """
+        -----Purpose: Binds a SKIP block GeoNode to an AST Skip node.
+        """
+        return Skip()
+    def bind_error(self, node: GeoNode) -> Throw:
+        """
+        -----Purpose: Binds an ERROR block GeoNode to an AST Throw node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Throw(expr)
+    def bind_spawn(self, node: GeoNode) -> Spawn:
+        """
+        -----Purpose: Binds a SPAWN block GeoNode to an AST Spawn node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Spawn(expr)
+    def bind_await(self, node: GeoNode) -> Await:
+        """
+        -----Purpose: Binds an AWAIT block GeoNode to an AST Await node.
+        """
+        expr = self.parse_expr_iterative(node.tokens[1:])
+        return Await(expr)
+    def bind_every(self, node: GeoNode) -> Every:
+        """
+        -----Purpose: Binds an EVERY block GeoNode to an AST Every node.
+        """
+        tokens = node.tokens
+        interval = self.parse_expr_iterative([tokens[1]])
+        unit = 'seconds'
+        if len(tokens) > 2:
+            if tokens[2].type == 'MINUTE':
+                unit = 'minutes'
+        body = [self.bind_node(c) for c in node.children]
+        return Every(interval, unit, body)
+    def bind_after_in(self, node: GeoNode) -> After:
+        """
+        -----Purpose: Binds an AFTER/IN block GeoNode to an AST After node.
+        """
+        tokens = node.tokens
+        delay = self.parse_expr_iterative([tokens[1]])
+        unit = 'seconds'
+        if len(tokens) > 2:
+            if tokens[2].type == 'MINUTE':
+                unit = 'minutes'
+        body = [self.bind_node(c) for c in node.children]
+        return After(delay, unit, body)
+    def bind_file_op(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Binds a File I/O block GeoNode (Read/Write/Append).
+        """
+        tokens = node.tokens
+        head = tokens[0].type
+        if head == 'READ':
+            return FileRead(self.parse_expr_iterative(tokens[1:]))
+        mode = 'w' if head == 'WRITE' else 'a'
+        content = self.parse_expr_iterative([tokens[1]])
+        path_tokens = tokens[3:] if len(tokens) > 3 else []
+        path = (
+            self.parse_expr_iterative(path_tokens) if path_tokens
+            else String('output.txt')
+        )
+        return FileWrite(path, content, mode)
+    def bind_csv_op(self, node: GeoNode) -> CsvOp:
+        """
+        -----Purpose: Binds a CSV operation GeoNode.
+        """
+        path = self.parse_expr_iterative(node.tokens[2:])
+        return CsvOp('load', None, path)
+
+    def bind_clipboard_op(self, node: GeoNode) -> ClipboardOp:
+        """
+        -----Purpose: Binds a Clipboard operation GeoNode.
+        """
+        op = node.tokens[0].value.lower()
+        return ClipboardOp(op, None)
+    def bind_archive_op(self, node: GeoNode) -> ArchiveOp:
+        """
+        -----Purpose: Binds an Archive operation GeoNode (Compress/Extract).
+        """
+        return ArchiveOp(
+            node.tokens[0].value.lower(),
+            self.parse_expr_iterative([node.tokens[1]]),
+            self.parse_expr_iterative(node.tokens[3:])
+        )
+    def bind_automation(self, node: GeoNode) -> AutomationOp:
+        """
+        -----Purpose: Binds an Automation operation GeoNode (Click/Type/Press).
+        """
+        return AutomationOp(
+            node.tokens[0].value.lower(),
+            [self.parse_expr_iterative(node.tokens[1:])]
+        )
+    def bind_download(self, node: GeoNode) -> Download:
+        """
+        -----Purpose: Binds a DOWNLOAD operation GeoNode.
+        """
+        return Download(self.parse_expr_iterative(node.tokens[1:]))
+    def bind_app(self, node: GeoNode) -> App:
+        """
+        -----Purpose: Binds an APP block GeoNode to an AST App node.
+        """
+        tokens = node.tokens
+        title = tokens[1].value
+        width, height = 500, 400
+        for i, t in enumerate(tokens):
+            if t.type == 'SIZE' and i + 2 < len(tokens):
+                width = int(tokens[i + 1].value)
+                height = int(tokens[i + 2].value)
+        body = [self.bind_ui_block(c) for c in node.children]
+        return App(title, width, height, body)
+    def bind_ui_block(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Binds a UI element GeoNode (Layout or Widget).
+        """
+        head = node.head_token.type
+        if head in ('COLUMN', 'ROW'):
+            return Layout(
+                head.lower(),
+                [self.bind_ui_block(c) for c in node.children]
+            )
+        elif head in ('BUTTON', 'INPUT', 'HEADING'):
+            label = node.tokens[1].value if len(node.tokens) > 1 else ""
+            var_name = None
+            handler = None
+            for i, t in enumerate(node.tokens):
+                if t.type == 'AS' and i + 1 < len(node.tokens):
+                    var_name = node.tokens[i + 1].value
+                if t.type == 'DO':
+                    handler = [self.bind_node(c) for c in node.children]
+            return Widget(head.lower(), label, var_name, handler)
+        return self.bind_node(node)
+    def bind_middleware(self, node: GeoNode) -> OnRequest:
+        """
+        -----Purpose: Binds a BEFORE REQUEST block (middleware).
+        """
+        return OnRequest(
+            String('__middleware__'),
+            [self.bind_node(c) for c in node.children]
+        )
+    def bind_use(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Legacy stub for 'using' keyword.
+        """
+        return self.bind_import_enhanced(node)
+    def bind_import_enhanced(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Binds an IMPORT/USE block GeoNode (including Python 
+                      imports).
+        """
+        tokens = node.tokens
+        if len(tokens) > 2 and tokens[1].value.lower() == 'python':
+            module = tokens[2].value
+            alias = None
+            if len(tokens) > 4 and tokens[3].type == 'AS':
+                alias = tokens[4].value
+            return PythonImport(module, alias)
+        path = tokens[1].value
+        if len(tokens) > 3 and tokens[2].type == 'AS':
+            return ImportAs(path, tokens[3].value)
+        return Import(path)
+    def bind_from_import(self, node: GeoNode) -> FromImport:
+        """
+        -----Purpose: Binds a FROM...IMPORT block GeoNode.
+        """
+        tokens = node.tokens
+        module = tokens[1].value
+        return FromImport(module, [])
+    def bind_natural_list(self, node: GeoNode) -> ListVal:
+        """
+        -----Purpose: Binds a natural language list ('a list of...') GeoNode.
+        """
+        idx = 0
+        for i, t in enumerate(node.tokens):
+            if t.type == 'OF':
+                idx = i
+                break
+        if idx == 0:
+            return ListVal([])
+        items = []
+        return ListVal(items)
+    def bind_natural_set(self, node: GeoNode) -> Call:
+        """
+        -----Purpose: Binds a natural language set ('a unique set of...') GeoNode.
+        """
+        return Call('Set', [self.bind_natural_list(node)])
     def bind_serve(self, node: GeoNode) -> ServeStatic:
+        """
+        -----Purpose: Binds a SERVE block GeoNode (static file serving).
+        """
         folder = String('public')
         url = String('/static')
         tokens = node.tokens
         for i, t in enumerate(tokens):
-            if t.type == 'FROM' and i+1 < len(tokens):
-                folder = self.parse_expr_iterative([tokens[i+1]])
-            if t.type == 'AT' and i+1 < len(tokens):
-                url = self.parse_expr_iterative([tokens[i+1]])
+            if t.type == 'FROM' and i + 1 < len(tokens):
+                folder = self.parse_expr_iterative([tokens[i + 1]])
+            if t.type == 'AT' and i + 1 < len(tokens):
+                url = self.parse_expr_iterative([tokens[i + 1]])
         return ServeStatic(folder, url)
     def bind_define(self, node: GeoNode) -> FunctionDef:
+        """
+        -----Purpose: Binds a DEFINE PAGE GeoNode (Web layout).
+        """
         tokens = node.tokens
         name = ''
         args = []
@@ -269,6 +683,9 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return FunctionDef(name, args, body)
     def bind_when(self, node: GeoNode) -> OnRequest:
+        """
+        -----Purpose: Binds a WHEN block GeoNode (HTTP route handler).
+        """
         tokens = node.tokens
         path = String('/')
         for i, t in enumerate(tokens):
@@ -278,6 +695,9 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return OnRequest(path, body)
     def bind_on(self, node: GeoNode) -> OnRequest:
+        """
+        -----Purpose: Binds an ON block GeoNode (Event handler).
+        """
         tokens = node.tokens
         path = String('/')
         for t in tokens:
@@ -287,6 +707,9 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return OnRequest(path, body)
     def bind_call_or_expr(self, node: GeoNode) -> Any:
+        """
+        -----Purpose: Binds a GeoNode to either a function Call or an expression.
+        """
         tokens = node.tokens
         if len(tokens) >= 1 and tokens[0].type == 'ID':
             name = tokens[0].value
@@ -295,15 +718,26 @@ class GeometricBindingParser:
             i = 1
             while i < len(tokens):
                 t = tokens[i]
-                is_attr_key = t.type in ('ID', 'STRUCTURE', 'HREF', 'REL', 'NAME', 'STYLE', 'CONTENT', 'CHARSET', 'SRC', 'ALT', 'TYPE', 'VALUE', 'PLACEHOLDER', 'METHOD', 'ACTION')
-                is_kwarg = (is_attr_key and i + 2 < len(tokens) and tokens[i + 1].type == 'ASSIGN')
+                is_attr_key = t.type in (
+                    'ID', 'STRUCTURE', 'HREF', 'REL', 'NAME', 'STYLE',
+                    'CONTENT', 'CHARSET', 'SRC', 'ALT', 'TYPE', 'VALUE',
+                    'PLACEHOLDER', 'METHOD', 'ACTION'
+                )
+                is_kwarg = (
+                    is_attr_key and i + 2 < len(tokens) and 
+                    tokens[i + 1].type == 'ASSIGN'
+                )
                 if is_kwarg:
                     key = t.value
                     val_token = tokens[i + 2]
                     if val_token.type == 'STRING':
                         kwargs.append((key, String(val_token.value)))
                     elif val_token.type == 'NUMBER':
-                        kwargs.append((key, Number(int(val_token.value) if '.' not in val_token.value else float(val_token.value))))
+                        val = Number(
+                            int(val_token.value) if '.' not in val_token.value
+                            else float(val_token.value)
+                        )
+                        kwargs.append((key, val))
                     else:
                         kwargs.append((key, VarAccess(val_token.value)))
                     i += 3
@@ -311,7 +745,11 @@ class GeometricBindingParser:
                 elif t.type == 'STRING':
                     args.append(String(t.value))
                 elif t.type == 'NUMBER':
-                    args.append(Number(int(t.value) if '.' not in t.value else float(t.value)))
+                    val = Number(
+                        int(t.value) if '.' not in t.value
+                        else float(t.value)
+                    )
+                    args.append(val)
                 elif t.type == 'ID':
                     args.append(VarAccess(t.value))
                 i += 1
@@ -320,41 +758,60 @@ class GeometricBindingParser:
                 body = [self.bind_node(child) for child in node.children]
             return Call(name, args, kwargs=kwargs, body=body)
         return self.parse_expr_iterative(tokens)
-    def _extract_expr_tokens(self, tokens: List[Token], start: int = 0) -> List[Token]:
+    def _extract_expr_tokens(
+        self, tokens: List[Token], start: int = 0
+    ) -> List[Token]:
+        """
+        -----Purpose: Extracts a subset of tokens for expression parsing, 
+                      stripping trailing colons.
+        """
         end = len(tokens)
         if tokens[-1].type == 'COLON':
             end -= 1
         return tokens[start:end]
-    def parse_expr_iterative(self, tokens: List[Token]) -> Node:
+    def parse_expr_iterative(self, tokens: List[Token]) -> Optional[Node]:
         """
-        Shunting-yard variant to produce AST directly.
-        Two stacks: 
-        1. values: [Node]
-        2. ops: [Token (operator)]
+        -----Purpose: Shunting-yard variant to produce an AST directly from a 
+                      flat list of tokens.
         """
-        if not tokens: return None
+        if not tokens:
+            return None
         values: List[Node] = []
         ops: List[str] = []
+
         def apply_op():
-            if not ops: return
+            """Applies the top operator to the top two values."""
+            if not ops:
+                return
             op_type = ops.pop()
             if len(values) >= 2:
                 right = values.pop()
                 left = values.pop()
                 op_map = {
-                    'PLUS': '+', 'MINUS': '-', 'MUL': '*', 'DIV': '/', 'MOD': '%',
-                    'LT': '<', 'GT': '>', 'LE': '<=', 'GE': '>=', 'EQ': '==', 'NEQ': '!=',
-                    'AND': 'and', 'OR': 'or'
+                    'PLUS': '+', 'MINUS': '-', 'MUL': '*', 'DIV': '/', 
+                    'MOD': '%', 'LT': '<', 'GT': '>', 'LE': '<=', 
+                    'GE': '>=', 'EQ': '==', 'NEQ': '!=', 'AND': 'and', 
+                    'OR': 'or'
                 }
                 op_str = op_map.get(op_type, op_type)
                 values.append(BinOp(left, op_str, right))
+            else:
+                raise SyntaxError(
+                    f"Invalid expression: missing operands for {op_type}"
+                )
+
         def precedence(op_type):
+            """Returns operator precedence level."""
             return self.precedence.get(op_type, 0)
+
         i = 0
         while i < len(tokens):
             t = tokens[i]
             if t.type == 'NUMBER':
-                values.append(Number(int(t.value) if '.' not in t.value else float(t.value)))
+                val = Number(
+                    int(t.value) if '.' not in t.value else float(t.value)
+                )
+                values.append(val)
             elif t.type == 'STRING':
                 values.append(String(t.value))
             elif t.type == 'LBRACKET':
@@ -363,10 +820,13 @@ class GeometricBindingParser:
                 elements_tokens = []
                 current_elem = []
                 while j < len(tokens):
-                    if tokens[j].type == 'LBRACKET': depth += 1
-                    elif tokens[j].type == 'RBRACKET': depth -= 1
+                    if tokens[j].type == 'LBRACKET':
+                        depth += 1
+                    elif tokens[j].type == 'RBRACKET':
+                        depth -= 1
                     if depth == 0:
-                        if current_elem: elements_tokens.append(current_elem)
+                        if current_elem:
+                            elements_tokens.append(current_elem)
                         break
                     if tokens[j].type == 'COMMA' and depth == 1:
                         elements_tokens.append(current_elem)
@@ -374,36 +834,44 @@ class GeometricBindingParser:
                     else:
                         current_elem.append(tokens[j])
                     j += 1
-                items = [self.parse_expr_iterative(elem) for elem in elements_tokens if elem]
+                items = [
+                    self.parse_expr_iterative(elem) 
+                    for elem in elements_tokens if elem
+                ]
                 values.append(ListVal(items))
                 i = j
             elif t.type == 'ID':
-                if i+1 < len(tokens) and tokens[i+1].type == 'LPAREN':
-                     name = t.value
-                     depth = 1
-                     j = i + 2
-                     elements_tokens = []
-                     current_elem = []
-                     arg_tokens_start = j
-                     if j < len(tokens) and tokens[j].type == 'RPAREN':
-                         i = j
-                         values.append(Call(name, []))
-                     else:
-                         while j < len(tokens):
-                             if tokens[j].type == 'LPAREN': depth += 1
-                             elif tokens[j].type == 'RPAREN': depth -= 1
-                             if depth == 0:
-                                 if current_elem: elements_tokens.append(current_elem)
-                                 break
-                             if tokens[j].type == 'COMMA' and depth == 1:
-                                 elements_tokens.append(current_elem)
-                                 current_elem = []
-                             else:
-                                 current_elem.append(tokens[j])
-                             j += 1
-                         args = [self.parse_expr_iterative(elem) for elem in elements_tokens if elem]
-                         values.append(Call(name, args))
-                         i = j
+                if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
+                    name = t.value
+                    depth = 1
+                    j = i + 2
+                    elements_tokens = []
+                    current_elem = []
+                    if j < len(tokens) and tokens[j].type == 'RPAREN':
+                        i = j
+                        values.append(Call(name, []))
+                    else:
+                        while j < len(tokens):
+                            if tokens[j].type == 'LPAREN':
+                                depth += 1
+                            elif tokens[j].type == 'RPAREN':
+                                depth -= 1
+                            if depth == 0:
+                                if current_elem:
+                                    elements_tokens.append(current_elem)
+                                break
+                            if tokens[j].type == 'COMMA' and depth == 1:
+                                elements_tokens.append(current_elem)
+                                current_elem = []
+                            else:
+                                current_elem.append(tokens[j])
+                            j += 1
+                        args = [
+                            self.parse_expr_iterative(elem)
+                            for elem in elements_tokens if elem
+                        ]
+                        values.append(Call(name, args))
+                        i = j
                 else:
                     values.append(VarAccess(t.value))
             elif t.type == 'LPAREN':
@@ -411,7 +879,8 @@ class GeometricBindingParser:
             elif t.type == 'RPAREN':
                 while ops and ops[-1] != 'LPAREN':
                     apply_op()
-                if ops: ops.pop()
+                if ops:
+                    ops.pop()
             elif t.type in self.precedence:
                 while (ops and ops[-1] != 'LPAREN' and
                        precedence(ops[-1]) >= precedence(t.type)):
@@ -420,4 +889,6 @@ class GeometricBindingParser:
             i += 1
         while ops:
             apply_op()
+        if len(values) > 1:
+            raise SyntaxError("Invalid expression: too many operands")
         return values[0] if values else None

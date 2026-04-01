@@ -1,8 +1,15 @@
+"""
+
+"""
+
 from typing import List, Optional
 from .lexer import Token, Lexer
 from .ast_nodes import *
 import re
 class Parser:
+    """
+    -----Purpose: Recursive descent parser that converts Token streams into AST Nodes.
+    """
     def __init__(self, tokens: List[Token]):
         self.tokens = [t for t in tokens if t.type != 'COMMENT']
         self.pos = 0
@@ -99,10 +106,12 @@ class Parser:
         elif self.check('ID'):
             return self.parse_id_start_statement()
         elif self.check('SPAWN'):
-             expr = self.parse_expression()
+             token = self.consume('SPAWN')
+             call_expr = self.parse_expression()
              self.consume('NEWLINE')
-             return Print(expr)
-             pass
+             node = Spawn(call_expr)
+             node.line = token.line
+             return node
         elif self.check('WAIT'):
             return self.parse_wait()
         elif self.check('EVERY'):
@@ -153,12 +162,10 @@ class Parser:
             return self.parse_heading()
         elif self.check('PARAGRAPH'):
             return self.parse_paragraph()
-        if self.check('ADD'):
-            return self.parse_add_to_list()
-        if self.check('REMOVE'):
-            return self.parse_remove_from_list()
         if self.check('WAIT'):
             return self.parse_wait()
+        if self.check('REMOVE'):
+            return self.parse_remove_from_list()
         if self.check('INCREMENT'):
             return self.parse_increment()
         elif self.check('DECREMENT'):
@@ -375,14 +382,21 @@ class Parser:
         node = Make(class_name, args)
         node.line = token.line
         return node
-        return node
     def parse_db_op(self) -> DatabaseOp:
         token = self.consume('DB')
         op = 'open'
-        if self.check('OPEN'): op = 'open'; self.consume()
-        elif self.check('QUERY'): op = 'query'; self.consume()
-        elif self.check('EXEC'): op = 'exec'; self.consume()
-        elif self.check('CLOSE'): op = 'close'; self.consume()
+        if self.check('OPEN'):
+            op = 'open'
+            self.consume()
+        elif self.check('QUERY'):
+            op = 'query'
+            self.consume()
+        elif self.check('EXEC'):
+            op = 'exec'
+            self.consume()
+        elif self.check('CLOSE'):
+            op = 'close'
+            self.consume()
         else:
              if self.check('STRING'):
                  op = 'open'
@@ -1795,16 +1809,21 @@ class Parser:
             op_val = op_token.value
             if op_token.type == 'IS':
                 if self.check('GREATER'):
-                    self.consume('GREATER'); self.consume('THAN')
+                    self.consume('GREATER')
+                    self.consume('THAN')
                     op_val = '>'
                 elif self.check('LESS'):
-                    self.consume('LESS'); self.consume('THAN')
+                    self.consume('LESS')
+                    self.consume('THAN')
                     op_val = '<'
                 elif self.check('EQUAL'):
-                    self.consume('EQUAL'); self.consume('TO')
+                    self.consume('EQUAL')
+                    self.consume('TO')
                     op_val = '=='
                 elif self.check('NOT'):
-                    self.consume('NOT'); self.consume('EQUAL'); self.consume('TO')
+                    self.consume('NOT')
+                    self.consume('EQUAL')
+                    self.consume('TO')
                     op_val = '!='
                 elif self.check('EMPTY'):
                     self.consume('EMPTY')
