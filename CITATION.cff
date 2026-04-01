@@ -4,10 +4,10 @@ authors:
 - family-names: "Naithani"
   given-names: "Shrey"
 title: "ShellLite"
-version: 0.4.0
+version: 0.5.3.4
 date-released: 2026-01-10
 url: "https://shelllite.tech"
-repository-code: "https://github.com/Shrey-N/ShellLite"
+repository-code: "https://github.com/ShellLite/ShellLite"
 abstract: "An English-Like Programming Language for Accessible Automation and Education."
 keywords:
   - python
@@ -15,4 +15,4 @@ keywords:
   - education
   - automation
   - natural-language-programming
-license: MIT
+license: GPLv3 with classpath exception
