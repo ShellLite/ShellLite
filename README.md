@@ -38,7 +38,7 @@ ShellLite is a modern programming language designed to prioritize human readabil
 | **Python Integration** | Use any Python library via The Bridge |
 | **GUI Framework** | Build desktop apps with The Canvas |
 | **Package Manager** | Manage dependencies with The Universe |
-| **Web Framework** | Built-in HTTP server and routing |
+| **Web Framework** | Built in HTTP server and routing |
 | **Interactive REPL** | Explore and test code interactively |
 
 ---
