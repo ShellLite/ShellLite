@@ -148,7 +148,6 @@ class Lexer:
                         f"Unterminated string on line {self.line_number}"
                     )
                 value = line[pos + 1:end_quote]
-                # Refactor escapes for 80-char compliance
                 value = value.replace("\\n", "\n").replace("\\t", "\t")
                 value = value.replace("\\r", "\r").replace("\\\"", "\"")
                 value = value.replace("\\\'", "\'")
