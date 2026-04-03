@@ -34,7 +34,7 @@ ShellLite is a modern programming language designed to prioritize human readabil
 |:--------|:------------|
 | **Natural Syntax** | Write code that reads like English |
 | **Dynamic Typing** | No type declarations required |
-| **Multi-Target Compilation** | Compile to LLVM, JavaScript, or Python |
+| **Multi Target Compilation** | Compile to LLVM, JavaScript, or Python |
 | **Python Integration** | Use any Python library via The Bridge |
 | **GUI Framework** | Build desktop apps with The Canvas |
 | **Package Manager** | Manage dependencies with The Universe |
