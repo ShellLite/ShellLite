@@ -2,7 +2,7 @@
 
 # ShellLite
 
-**The English-Like Programming Language**
+**An english Like Programming Language**
 
 ShellLite is a modern programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable. With version 0.05.0, ShellLite now supports native compilation via LLVM alongside its interpreted mode.
 
