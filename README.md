@@ -144,7 +144,7 @@ shl
 ```
 
 ```
-ShellLite REPL - English Syntax
+ShellLite REPL
 ========================================
 >>> say "Hello"
 Hello
