@@ -602,6 +602,26 @@ class Interpreter:
                 continue
             except ReturnException:
                 raise
+
+    def visit_ForIn(self, node: ForIn):
+        """
+        -----Purpose: Evaluates a for in loop over an iterable.
+        """
+        iterable = self.visit(node.iterable)
+        if not isinstance(iterable, (list, str)):
+            raise TypeError(f"Cannot iterate over {type(iterable).__name__}")
+        for item in iterable:
+            self.current_env.set(node.var_name, item)
+            try:
+                for stmt in node.body:
+                    self.visit(stmt)
+            except StopException:
+                break
+            except SkipException:
+                continue
+            except ReturnException:
+                raise
+
     def visit_Input(self, node: Input):
         """
         -----Purpose: Prompts the user for input.
