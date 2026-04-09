@@ -1078,24 +1078,32 @@ class Interpreter:
             return json.dumps(obj)
         except Exception as e:
             raise RuntimeError(f"JSON stringify failed: {e}")
-    def builtin_http_get(self, url):
+    def builtin_http_get(self, url, headers=None):
         """
-        -----Purpose: Performs a synchronous HTTP GET request.
+        -----Purpose: Performs a synchronous HTTP GET request with optional headers.
         """
         try:
-            with urllib.request.urlopen(url) as response:
+            if isinstance(headers, Instance):
+                headers = headers.data
+            req = urllib.request.Request(url, headers=headers or {})
+            with urllib.request.urlopen(req) as response:
                 return response.read().decode('utf-8')
         except Exception as e:
             raise RuntimeError(f"HTTP GET failed for '{url}': {e}")
-    def builtin_http_post(self, url, data_dict):
+    def builtin_http_post(self, url, data_dict, headers=None):
         """
-        -----Purpose: Performs a synchronous HTTP POST request with JSON data.
+        -----Purpose: Performs a synchronous HTTP POST request with JSON data and optional headers.
         """
         try:
+            if isinstance(headers, Instance):
+                headers = headers.data
             if isinstance(data_dict, Instance):
                 data_dict = data_dict.data
             data = json.dumps(data_dict).encode('utf-8')
-            req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+            all_headers = {'Content-Type': 'application/json'}
+            if headers:
+                all_headers.update(headers)
+            req = urllib.request.Request(url, data=data, headers=all_headers)
             with urllib.request.urlopen(req) as response:
                  return response.read().decode('utf-8')
         except Exception as e:
