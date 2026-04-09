@@ -313,7 +313,7 @@ class Lexer:
                         'field': 'FIELD', 'submit': 'SUBMIT', 'named': 'NAMED',
                         'placeholder': 'PLACEHOLDER',
                         'app': 'APP', 'title': 'ID', 'size': 'SIZE',
-                        'column': 'COLUMN', 'row': 'ROW',
+                        'column': 'ID', 'row': 'ID',
                         'button': 'BUTTON', 'heading': 'HEADING', 
                         'upper': 'UPPER', 'lower': 'LOWER',
                         'increment': 'INCREMENT', 'decrement': 'DECREMENT',
