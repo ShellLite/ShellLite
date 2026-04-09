@@ -156,6 +156,8 @@ class GeometricBindingParser:
             'UNTIL': self.bind_until, 'ON': self.bind_on,
             'FUNCTION': self.bind_func, 'TO': self.bind_func,
             'PRINT': self.bind_print, 'SAY': self.bind_print,
+            'MAKE': self.bind_assignment,
+            'RETURN': self.bind_return,
             'ALERT': self.bind_alert, 'PROMPT': self.bind_prompt,
             'CONFIRM': self.bind_confirm, 'EXECUTE': self.bind_execute,
             'EXIT': self.bind_exit, 'STOP': self.bind_stop,
@@ -190,8 +192,17 @@ class GeometricBindingParser:
                 if t1 == 'UNIQUE' and len(node.tokens) > 2:
                     if node.tokens[2].type == 'SET':
                         return self.bind_natural_set(node)
-            if len(node.tokens) >= 2 and node.tokens[1].type == 'ASSIGN':
+            if len(node.tokens) >= 2 and node.tokens[1].type in ('ASSIGN', 'IS'):
                 return self.bind_assignment(node)
+            # Check for array assignment
+            assign_idx = -1
+            for k, tok in enumerate(node.tokens):
+                if tok.type in ('ASSIGN', 'IS'):
+                    assign_idx = k
+                    break
+            if assign_idx != -1 and node.tokens[1].type == 'LBRACKET':
+                return self.bind_index_assignment(node, assign_idx)
+                
             return self.bind_call_or_expr(node)
             
         return self.bind_call_or_expr(node)
@@ -355,6 +366,11 @@ class GeometricBindingParser:
         return ForIn(var_name, iterable, body)
     def bind_print(self, node: GeoNode) -> Print:
         """
+        -----Purpose: Binds a PRINT GeoNode to an AST Print node.
+        """
+        ...
+
+        """
         -----Purpose: Binds a PRINT block GeoNode to an AST Print node.
         """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
@@ -373,13 +389,36 @@ class GeometricBindingParser:
         """
         assign_idx = -1
         for i, t in enumerate(node.tokens):
-            if t.type == 'ASSIGN':
+            if t.type in ('ASSIGN', 'IS', 'BE'):
                 assign_idx = i
                 break
-        name = node.tokens[0].value
+        
+        if assign_idx == -1:
+            raise SyntaxError("Assignment operator missing")
+
+        if node.head_token.type == 'MAKE':
+            name = node.tokens[1].value
+        else:
+            name = node.tokens[0].value
+
         expr_tokens = node.tokens[assign_idx + 1:]
         value = self.parse_expr_iterative(expr_tokens)
         return Assign(name, value)
+        
+    def bind_index_assignment(self, node: GeoNode, assign_idx: int) -> Any:
+        """
+        -----Purpose: Binds an array/dict assignment (e.g. board[x] = y)
+        """
+        lhs_tokens = node.tokens[:assign_idx]
+        value_tokens = node.tokens[assign_idx + 1:]
+        
+        lhs_expr = self.parse_expr_iterative(lhs_tokens)
+        value_expr = self.parse_expr_iterative(value_tokens)
+        
+        if type(lhs_expr).__name__ == "IndexAccess":
+            return IndexAssign(lhs_expr.obj, lhs_expr.index, value_expr)
+        
+        raise SyntaxError("Invalid index assignment syntax")
     def bind_expression_stmt(self, node: GeoNode) -> Any:
         """
         -----Purpose: Binds an expression GeoNode to an AST expression.
@@ -408,12 +447,10 @@ class GeometricBindingParser:
             start = 2
         name = node.tokens[start].value
         args = []
-        collecting_args = False
         for t in node.tokens[start + 1:]:
             if t.type == 'USING':
-                collecting_args = True
                 continue
-            if t.type == 'ID' and collecting_args:
+            if t.type == 'ID':
                 args.append((t.value, None, None))
             elif t.type == 'COLON':
                 break
@@ -815,6 +852,10 @@ class GeometricBindingParser:
             elif t.type == 'STRING':
                 values.append(String(t.value))
             elif t.type == 'LBRACKET':
+                is_indexing = False
+                if i > 0 and tokens[i - 1].type in ('ID', 'RBRACKET', 'RPAREN', 'STRING'):
+                    is_indexing = True
+                    
                 depth = 1
                 j = i + 1
                 elements_tokens = []
@@ -838,7 +879,50 @@ class GeometricBindingParser:
                     self.parse_expr_iterative(elem) 
                     for elem in elements_tokens if elem
                 ]
-                values.append(ListVal(items))
+                
+                if is_indexing:
+                    obj = values.pop() if values else None
+                    if items:
+                        values.append(IndexAccess(obj, items[0]))
+                else:
+                    values.append(ListVal(items))
+                i = j
+            elif t.type == 'LBRACE':
+                depth = 1
+                j = i + 1
+                pairs_tokens = []
+                current_pair = []
+                while j < len(tokens):
+                    if tokens[j].type == 'LBRACE':
+                        depth += 1
+                    elif tokens[j].type == 'RBRACE':
+                        depth -= 1
+                    if depth == 0:
+                        if current_pair:
+                            pairs_tokens.append(current_pair)
+                        break
+                    if tokens[j].type == 'COMMA' and depth == 1:
+                        pairs_tokens.append(current_pair)
+                        current_pair = []
+                    else:
+                        current_pair.append(tokens[j])
+                    j += 1
+                
+                pairs = []
+                for p_tokens in pairs_tokens:
+                    if not p_tokens: continue
+                    colon_idx = -1
+                    for k, pt in enumerate(p_tokens):
+                        if pt.type == 'COLON':
+                            colon_idx = k
+                            break
+                    if colon_idx != -1:
+                        key_expr = self.parse_expr_iterative(p_tokens[:colon_idx])
+                        val_expr = self.parse_expr_iterative(p_tokens[colon_idx+1:])
+                        if key_expr and val_expr:
+                            pairs.append((key_expr, val_expr))
+                
+                values.append(Dictionary(pairs))
                 i = j
             elif t.type == 'ID':
                 if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
