@@ -53,8 +53,16 @@ class Environment:
     def set(self, name: str, value: Any):
         if name in self.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
-        if self.parent and name in self.parent.constants:
-            raise RuntimeError(f"Cannot reassign constant '{name}'")
+        # Update existing variable in current or parent scope
+        curr = self
+        while curr:
+            if name in curr.variables:
+                if name in curr.constants:
+                    raise RuntimeError(f"Cannot reassign constant '{name}'")
+                curr.variables[name] = value
+                return
+            curr = curr.parent
+        # Not found, create in current scope
         self.variables[name] = value
     def set_const(self, name: str, value: Any):
         if name in self.variables:
@@ -154,8 +162,8 @@ class Interpreter:
         self.global_env.set('float', float)
         self.global_env.set('list', list)
         self.global_env.set('len', len)
-        self.global_env.set('input', input)
-        self.global_env.set('range', range)
+        self.global_env.set('None', None)
+        self.global_env.set('null', None)
         self.global_env.set('wait', time.sleep)
         self.global_env.set('append', self._builtin_smart_add)
         self.global_env.set('push', self._builtin_smart_add)
@@ -515,41 +523,41 @@ class Interpreter:
         """
         left = self.visit(node.left)
         right = self.visit(node.right)
-        if node.op == '+':
-            if isinstance(left, str) or isinstance(right, str):
-                return str(left) + str(right)
-            if isinstance(left, list) and isinstance(right, list):
+        try:
+            if node.op == '+':
+                if isinstance(left, str) or isinstance(right, str):
+                    return str(left) + str(right)
+                if isinstance(left, list) and isinstance(right, list):
+                    return left + right
                 return left + right
-            return left + right
-        elif node.op == '-':
-            return left - right
-        elif node.op == '*':
-            return left * right
-        elif node.op == '/':
-            return left / right
-        elif node.op == '%':
-            return left % right
-        elif node.op == '==':
-            return left == right
-        elif node.op == '!=':
-            return left != right
-        elif node.op == '<':
-            return left < right
-        elif node.op == '>':
-            return left > right
-        elif node.op == '<=':
-            return left <= right
-        elif node.op == '>=':
-            return left >= right
-        elif node.op == 'and':
-            return left and right
-        elif node.op == 'or':
-            return left or right
-        elif node.op == 'matches':
-            pattern = right
-            if hasattr(pattern, 'search'):
-                return bool(pattern.search(str(left)))
-            return bool(re.search(str(pattern), str(left)))
+            elif node.op == '-':
+                return left - right
+            elif node.op == '*':
+                return left * right
+            elif node.op == '/':
+                return left / right
+            elif node.op == '%':
+                return left % right
+            elif node.op == '==':
+                return left == right
+            elif node.op == '!=':
+                return left != right
+            elif node.op == '<':
+                return left < right
+            elif node.op == '>':
+                return left > right
+            elif node.op == '<=':
+                return left <= right
+            elif node.op == '>=':
+                return left >= right
+            elif node.op == 'and':
+                return left and right
+            elif node.op == 'or':
+                return left or right
+            elif node.op == 'matches':
+                return bool(re.search(str(right), str(left)))
+        except TypeError as e:
+            raise e
         raise Exception(f"Unknown operator: {node.op}")
     def visit_Print(self, node: Print):
         """
@@ -603,24 +611,7 @@ class Interpreter:
             except ReturnException:
                 raise
 
-    def visit_ForIn(self, node: ForIn):
-        """
-        -----Purpose: Evaluates a for in loop over an iterable.
-        """
-        iterable = self.visit(node.iterable)
-        if not isinstance(iterable, (list, str)):
-            raise TypeError(f"Cannot iterate over {type(iterable).__name__}")
-        for item in iterable:
-            self.current_env.set(node.var_name, item)
-            try:
-                for stmt in node.body:
-                    self.visit(stmt)
-            except StopException:
-                break
-            except SkipException:
-                continue
-            except ReturnException:
-                raise
+
 
     def visit_Input(self, node: Input):
         """
@@ -679,6 +670,8 @@ class Interpreter:
         val = self.visit(node.right)
         if node.op == 'not':
             return not val
+        if node.op == '-':
+            return -val
         raise Exception(f"Unknown unary operator: {node.op}")
     def visit_Throw(self, node: Throw):
         """
@@ -723,8 +716,12 @@ class Interpreter:
                 ret_val = val
         except ReturnException as e:
             ret_val = e.value
+        except Exception as e:
+            self.current_env = old_env
+            raise e
         finally:
             self.current_env = old_env
+            
         return ret_val
     def visit_Call(self, node: Call):
         """
@@ -1237,21 +1234,29 @@ class Interpreter:
         self.current_env.set_const(node.name, value)
         return value
     def visit_ForIn(self, node: ForIn):
+        """
+        -----Purpose: Evaluates a for in loop over an iterable.
+        """
         iterable = self.visit(node.iterable)
         if not hasattr(iterable, '__iter__'):
             raise TypeError(f"Cannot iterate over {type(iterable).__name__}")
-        old_env = self.current_env
-        new_env = Environment(parent=self.current_env)
-        self.current_env = new_env
-        try:
-            for item in iterable:
-                new_env.set(node.var_name, item)
+        
+        # Note: We do not create a new Environment here by default 
+        # to allow for loop variables to persist or update parent scope.
+        # But we do need to handle Skip/Stop.
+        for item in iterable:
+            self.current_env.set(node.var_name, item)
+            try:
                 for stmt in node.body:
                     self.visit(stmt)
-        except ReturnException:
-            raise
-        finally:
-            self.current_env = old_env
+            except StopException:
+                break
+            except SkipException:
+                continue
+            except ReturnException:
+                raise
+            except Exception as e:
+                raise e
     def visit_IndexAccess(self, node: IndexAccess):
         """
         -----Purpose: Evaluates an index or key access on a collection.
