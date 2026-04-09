@@ -194,6 +194,7 @@ class GeometricBindingParser:
                         return self.bind_natural_set(node)
             if len(node.tokens) >= 2 and node.tokens[1].type in ('ASSIGN', 'IS'):
                 return self.bind_assignment(node)
+            
             # Check for array assignment
             assign_idx = -1
             for k, tok in enumerate(node.tokens):
@@ -342,13 +343,18 @@ class GeometricBindingParser:
                     body = [self.bind_node(c) for c in node.children]
                     return Repeat(count, body)
             return None
-        iter_tokens = self._extract_expr_tokens(node.tokens, in_idx + 1)
-        iterable = self.parse_expr_iterative(iter_tokens)
         body = [self.bind_node(c) for c in node.children]
+        # Check for range(...) special case FIRST, before
+        # generic parse_expr_iterative which can't handle
+        # the RANGE keyword token.
         if node.tokens[in_idx + 1].type == 'RANGE':
             args_tokens = self._extract_expr_tokens(node.tokens, in_idx+2)
+            filtered = [
+                t for t in args_tokens
+                if t.type not in ('LPAREN', 'RPAREN', 'COMMA')
+            ]
             range_args = []
-            for t in args_tokens:
+            for t in filtered:
                 if t.type == 'NUMBER':
                     val = Number(
                         int(t.value) if '.' not in t.value else float(t.value)
@@ -363,6 +369,11 @@ class GeometricBindingParser:
                 if val:
                     range_args.append(val)
             iterable = Call('range', range_args)
+        else:
+            iter_tokens = self._extract_expr_tokens(
+                node.tokens, in_idx + 1
+            )
+            iterable = self.parse_expr_iterative(iter_tokens)
         return ForIn(var_name, iterable, body)
     def bind_print(self, node: GeoNode) -> Print:
         """
@@ -844,6 +855,24 @@ class GeometricBindingParser:
         i = 0
         while i < len(tokens):
             t = tokens[i]
+            # Unary minus: if MINUS appears at the start
+            # or after an operator / open-paren / comma,
+            # treat it as negation: 0 - <next value>.
+            if t.type == 'MINUS':
+                is_unary = (
+                    i == 0 or
+                    tokens[i - 1].type in (
+                        'LPAREN', 'COMMA', 'ASSIGN',
+                        'PLUS', 'MINUS', 'MUL', 'DIV',
+                        'MOD', 'LT', 'GT', 'LE', 'GE',
+                        'EQ', 'NEQ', 'AND', 'OR',
+                    )
+                )
+                if is_unary:
+                    values.append(Number(0))
+                    ops.append('MINUS')
+                    i += 1
+                    continue
             if t.type == 'NUMBER':
                 val = Number(
                     int(t.value) if '.' not in t.value else float(t.value)
@@ -924,7 +953,12 @@ class GeometricBindingParser:
                 
                 values.append(Dictionary(pairs))
                 i = j
-            elif t.type == 'ID':
+            elif t.type in (
+                'ID', 'ADD', 'REMOVE', 'SAY', 'PRINT',
+                'CONVERT', 'WAIT', 'LOAD', 'SAVE',
+                'SET', 'LIST', 'SIZE',
+                'UPPER', 'LOWER', 'SORT',
+            ):
                 if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
                     name = t.value
                     depth = 1
@@ -936,15 +970,17 @@ class GeometricBindingParser:
                         values.append(Call(name, []))
                     else:
                         while j < len(tokens):
-                            if tokens[j].type == 'LPAREN':
+                            t_type = tokens[j].type
+                            if t_type in ('LPAREN', 'LBRACKET', 'LBRACE'):
                                 depth += 1
-                            elif tokens[j].type == 'RPAREN':
+                            elif t_type in ('RPAREN', 'RBRACKET', 'RBRACE'):
                                 depth -= 1
+                            
                             if depth == 0:
                                 if current_elem:
                                     elements_tokens.append(current_elem)
                                 break
-                            if tokens[j].type == 'COMMA' and depth == 1:
+                            if t_type == 'COMMA' and depth == 1:
                                 elements_tokens.append(current_elem)
                                 current_elem = []
                             else:
