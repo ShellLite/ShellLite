@@ -397,6 +397,8 @@ class Interpreter:
         with urllib.request.urlopen(req) as response:
             return response.read().decode('utf-8')
     def visit(self, node: Node) -> Any:
+        if node is None:
+            return None
         try:
             method_name = f'visit_{type(node).__name__}'
             visitor = getattr(self, method_name, self.generic_visit)
@@ -485,6 +487,28 @@ class Interpreter:
         value = self.visit(node.value)
         self.current_env.set(node.name, value)
         return value
+    def visit_IndexAccess(self, node: IndexAccess):
+        """
+        -----Purpose: Evaluates an index/key access on list/dict.
+        """
+        obj = self.visit(node.obj)
+        index = self.visit(node.index)
+        try:
+            return obj[index]
+        except (IndexError, KeyError, TypeError) as e:
+            raise RuntimeError(f"Index access error: {e}")
+    def visit_IndexAssign(self, node: IndexAssign):
+        """
+        -----Purpose: Assigns a value at an index/key of list/dict.
+        """
+        obj = self.visit(node.obj)
+        index = self.visit(node.index)
+        value = self.visit(node.value)
+        try:
+            obj[index] = value
+            return value
+        except (IndexError, KeyError, TypeError) as e:
+            raise RuntimeError(f"Index assignment error: {e}")
     def visit_BinOp(self, node: BinOp):
         """
         -----Purpose: Evaluates a binary operation between two nodes.
