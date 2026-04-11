@@ -245,6 +245,14 @@ class IndexAccess(Node):
     obj: Node
     index: Node
 @dataclass
+class IndexAssign(Node):
+    """
+    -----Purpose: Represents an assignment to a list index or dictionary key.
+    """
+    obj: Node
+    index: Node
+    value: Node
+@dataclass
 class Stop(Node):
     """
     -----Purpose: Represents a 'stop' (break) statement.
