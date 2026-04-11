@@ -191,7 +191,7 @@ class Interpreter:
             'print': print,
             'abs': abs, 'min': min, 'max': max,
             'round': round, 'pow': pow, 'sum': sum,
-            'split': lambda s, d=" ": s.split(d),
+            'split': self._builtin_split,
             'join': lambda lst, d="": d.join(str(x) for x in lst),
             'replace': lambda s, old, new: s.replace(old, new),
             'upper': self._builtin_upper,
@@ -747,7 +747,7 @@ class Interpreter:
                                  self.web.add_text(res)
                      finally:
                          self.web.pop()
-                 return result
+             return result
         try:
             func = self.current_env.get(node.name)
             if callable(func):
@@ -779,8 +779,6 @@ class Interpreter:
                 if valid_chain:
                     return curr_obj
                 pass
-        except NameError:
-            pass
         except NameError:
             pass
         if node.name not in self.functions:
@@ -1038,7 +1036,7 @@ class Interpreter:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"Command Error: {result.stderr}")
-            return result.stdout.strip() or result.stderr.strip()
+            return result.stdout.strip()
         except Exception as e:
             raise RuntimeError(f"Failed to run command: {e}")
     def builtin_read(self, path):
@@ -1302,6 +1300,20 @@ class Interpreter:
         -----Purpose: Raises a SkipException to continue a loop.
         """
         raise SkipException()
+    def visit_Dictionary(self, node: Dictionary):
+        """
+        -----Purpose: Evaluates a dictionary literal into a Python dictionary.
+        """
+        result = {}
+        for key_node, val_node in node.pairs:
+            key = self.visit(key_node)
+            val = self.visit(val_node)
+            result[key] = val
+        return result
+    def _builtin_split(self, s, delimiter=" "):
+        if delimiter == "":
+            return list(s)
+        return s.split(delimiter)
     def visit_PythonImport(self, node: PythonImport):
         """
         -----Purpose: Imports a raw Python module into the global environment.
