@@ -189,6 +189,8 @@ class Interpreter:
             'json_parse': self.builtin_json_parse,
             'json_stringify': self.builtin_json_stringify,
             'print': print,
+            'add': self._builtin_smart_add,
+            'ask': input,
             'abs': abs, 'min': min, 'max': max,
             'round': round, 'pow': pow, 'sum': sum,
             'split': self._builtin_split,
@@ -546,6 +548,10 @@ class Interpreter:
                 return left < right
             elif node.op == '>':
                 return left > right
+            elif node.op == 'in':
+                return left in right
+            elif node.op == 'not in':
+                return left not in right
             elif node.op == '<=':
                 return left <= right
             elif node.op == '>=':
