@@ -27,6 +27,7 @@ class GeometricBindingParser:
         self.precedence = {
             'OR': 1, 'AND': 2, 'NOT': 3,
             'EQ': 4, 'NEQ': 4, 'LT': 5, 'GT': 5, 'LE': 5, 'GE': 5, 'IS': 5,
+            'IN': 5, 'NOTIN': 5,
             'PLUS': 6, 'MINUS': 6,
             'MUL': 7, 'DIV': 7, 'MOD': 7,
             'POW': 8,
@@ -178,7 +179,9 @@ class GeometricBindingParser:
             'IMPORT': self.bind_import_enhanced,
             'FROM': self.bind_from_import,
             'SET': self.bind_expression_statement,
-            'ADD': self.bind_expression_statement,
+            'ADD': self.bind_add,
+            'INCREMENT': self.bind_natural_math,
+            'DECREMENT': self.bind_natural_math,
             'PUT': self.bind_expression_statement,
             'PUSH': self.bind_expression_statement,
             'JSON': self.bind_expression_statement,
@@ -187,7 +190,7 @@ class GeometricBindingParser:
             'STR': self.bind_expression_statement,
             'LEN': self.bind_expression_statement,
             'KEYS': self.bind_expression_statement,
-            'REMOVE': self.bind_expression_statement,
+            'REMOVE': self.bind_remove,
         }
         
         if head_type in bind_map:
@@ -349,7 +352,14 @@ class GeometricBindingParser:
         """
         if len(node.tokens) < 3:
             return None
-        var_name = node.tokens[1].value
+        
+        start_idx = 1
+        if node.tokens[1].type == 'EACH':
+            start_idx = 2
+            if len(node.tokens) < 4:
+                return None
+        
+        var_name = node.tokens[start_idx].value
         in_idx = -1
         for i, t in enumerate(node.tokens):
             if t.type == 'IN':
@@ -574,6 +584,63 @@ class GeometricBindingParser:
                 unit = 'minutes'
         body = self.bind_statement_list(node.children)
         return After(delay, unit, body)
+    def bind_add(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Binds an ADD statement
+        """
+        tokens = node.tokens
+        # ADD [item] TO [target]
+        to_idx = -1
+        for i, t in enumerate(tokens):
+            if t.type == 'TO':
+                to_idx = i
+                break
+        
+        if to_idx != -1:
+            item = self.parse_expr_iterative(tokens[1:to_idx])
+            target = self.parse_expr_iterative(tokens[to_idx + 1:])
+            return Call('add', [target, item])
+        
+        return self.bind_expression_statement(node)
+
+    def bind_natural_math(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Binds natural math
+        """
+        tokens = node.tokens
+        head = tokens[0].type
+        by_idx = -1
+        for i, t in enumerate(tokens):
+            if t.type == 'BY':
+                by_idx = i
+                break
+        
+        if by_idx != -1:
+            var_name = tokens[1].value
+            val = self.parse_expr_iterative(tokens[by_idx + 1:])
+            op = '+' if head == 'INCREMENT' else '-'
+            return Assign(var_name, BinOp(VarAccess(var_name), op, val))
+            
+        return self.bind_expression_statement(node)
+
+    def bind_remove(self, node: GeoNode) -> Node:
+        """
+        -----Purpose: Binds a REMOVE statement
+        """
+        tokens = node.tokens
+        from_idx = -1
+        for i, t in enumerate(tokens):
+            if t.type == 'FROM':
+                from_idx = i
+                break
+        
+        if from_idx != -1:
+            item = self.parse_expr_iterative(tokens[1:from_idx])
+            target = self.parse_expr_iterative(tokens[from_idx + 1:])
+            return Call('remove', [target, item])
+            
+        return self.bind_expression_statement(node)
+
     def bind_file_op(self, node: GeoNode) -> Node:
         """
         -----Purpose: Binds a File I/O block GeoNode (Read/Write/Append).
@@ -699,20 +766,44 @@ class GeometricBindingParser:
         """
         -----Purpose: Binds a natural language list ('a list of...') GeoNode.
         """
-        idx = 0
+        idx = -1
         for i, t in enumerate(node.tokens):
             if t.type == 'OF':
                 idx = i
                 break
-        if idx == 0:
+        
+        if idx == -1:
             return ListVal([])
-        items = []
+            
+        items_tokens = node.tokens[idx + 1:]
+        if not items_tokens:
+            return ListVal([])
+            
+        # Parse items as a comma separated list of expressions
+        elements_tokens = []
+        current_elem = []
+        for t in items_tokens:
+            if t.type == 'COMMA':
+                if current_elem:
+                    elements_tokens.append(current_elem)
+                    current_elem = []
+            else:
+                current_elem.append(t)
+        if current_elem:
+            elements_tokens.append(current_elem)
+            
+        items = [
+            self.parse_expr_iterative(elem)
+            for elem in elements_tokens if elem
+        ]
         return ListVal(items)
+
     def bind_natural_set(self, node: GeoNode) -> Call:
         """
         -----Purpose: Binds a natural language set ('a unique set of...') GeoNode.
         """
-        return Call('Set', [self.bind_natural_list(node)])
+        l_val = self.bind_natural_list(node)
+        return Call('set', [l_val])
     def bind_serve(self, node: GeoNode) -> ServeStatic:
         """
         -----Purpose: Binds a SERVE block GeoNode (static file serving).
@@ -861,7 +952,7 @@ class GeometricBindingParser:
                     'PLUS': '+', 'MINUS': '-', 'MUL': '*', 'DIV': '/', 
                     'MOD': '%', 'LT': '<', 'GT': '>', 'LE': '<=', 
                     'GE': '>=', 'EQ': '==', 'NEQ': '!=', 'AND': 'and', 
-                    'OR': 'or'
+                    'OR': 'or', 'IS': '==', 'IN': 'in', 'NOTIN': 'not in'
                 }
                 op_str = op_map.get(op_type, op_type)
                 values.append(BinOp(left, op_str, right))
@@ -975,8 +1066,58 @@ class GeometricBindingParser:
                 
                 values.append(Dictionary(pairs))
                 i = j
+            elif t.type == 'LIST' and i + 1 < len(tokens) and tokens[i + 1].type == 'OF':
+                j = i + 2
+                elements_tokens = []
+                current_elem = []
+                while j < len(tokens):
+                    if tokens[j].type == 'COMMA':
+                        if current_elem:
+                            elements_tokens.append(current_elem)
+                            current_elem = []
+                    else:
+                        current_elem.append(tokens[j])
+                    j += 1
+                if current_elem:
+                    elements_tokens.append(current_elem)
+                
+                items = [
+                    self.parse_expr_iterative(elem)
+                    for elem in elements_tokens if elem
+                ]
+                values.append(ListVal(items))
+                i = j
+                continue
+            elif t.type == 'UNIQUE' and i + 2 < len(tokens) and tokens[i + 1].type == 'SET' and tokens[i + 2].type == 'OF':
+                # Natural set: [a] unique set of item1, item2...
+                j = i + 3
+                elements_tokens = []
+                current_elem = []
+                while j < len(tokens):
+                    if tokens[j].type == 'COMMA':
+                        if current_elem:
+                            elements_tokens.append(current_elem)
+                            current_elem = []
+                    else:
+                        current_elem.append(tokens[j])
+                    j += 1
+                if current_elem:
+                    elements_tokens.append(current_elem)
+                
+                items = [
+                    self.parse_expr_iterative(elem)
+                    for elem in elements_tokens if elem
+                ]
+                values.append(Call('set', [ListVal(items)]))
+                i = j
+                continue
+            elif t.type == 'ASK' and i + 1 < len(tokens) and tokens[i + 1].type == 'STRING':
+                # Natural ask: ask "Question"
+                values.append(Call('ask', [String(tokens[i + 1].value)]))
+                i += 2
+                continue
             elif t.type in (
-                'ID', 'ADD', 'REMOVE', 'SAY', 'PRINT',
+                'ID', 'ADD', 'REMOVE', 'SAY', 'PRINT', 'ASK',
                 'CONVERT', 'WAIT', 'LOAD', 'SAVE',
                 'SET', 'LIST', 'SIZE', 'INT', 'STR', 'LEN', 'KEYS',
                 'UPPER', 'LOWER', 'SORT',
