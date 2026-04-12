@@ -3,7 +3,7 @@
 """
 import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 @dataclass
 class Token:
     """
@@ -321,7 +321,6 @@ class Lexer:
                         'yellow': 'YELLOW', 'cyan': 'CYAN', 'magenta': 'MAGENTA',
                         'serve': 'SERVE', 'static': 'STATIC',
                         'write': 'WRITE', 'append': 'APPEND', 'read': 'READ', 'file': 'FILE',
-                        'write': 'WRITE', 'append': 'APPEND', 'read': 'READ', 'file': 'FILE',
                         'db': 'DB', 'database': 'DB',
                         'query': 'QUERY', 'open': 'OPEN', 'close': 'CLOSE', 'exec': 'EXEC',
                         'middleware': 'MIDDLEWARE', 'before': 'BEFORE',
@@ -338,7 +337,7 @@ class Lexer:
                         'placeholder': 'PLACEHOLDER',
                         'app': 'APP', 'title': 'ID', 'size': 'SIZE',
                         'column': 'ID', 'row': 'ID',
-                        'button': 'BUTTON', 'heading': 'HEADING', 
+                        'button': 'BUTTON', 
                         'upper': 'UPPER', 'lower': 'LOWER',
                         'increment': 'INCREMENT', 'decrement': 'DECREMENT',
                         'multiply': 'MULTIPLY', 'divide': 'DIVIDE',
@@ -346,15 +345,12 @@ class Lexer:
                         'be': 'BE', 'by': 'BY',
                         'plus': 'PLUS', 'minus': 'MINUS', 'divided': 'DIV',
                         'greater': 'GREATER', 'less': 'LESS', 'equal': 'EQUAL',
-                        'define': 'DEFINE', 'function': 'FUNCTION',
+                        'function': 'FUNCTION',
                         'contains': 'CONTAINS', 'empty': 'EMPTY',
                         'remove': 'REMOVE',
                         'than': 'THAN',
                         'doing': 'DOING',
-                        'make': 'MAKE', 'be': 'BE',
-                        'as': 'AS', 'long': 'LONG',
-                        'otherwise': 'OTHERWISE',
-                        'ask': 'ASK',
+                        'long': 'LONG',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(
