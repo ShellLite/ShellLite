@@ -1,33 +1,30 @@
-from typing import Any, Dict, List, Callable
-from .ast_nodes import *
-from .lexer import Token, Lexer
-from .parser_gbp import GeometricBindingParser
+import concurrent.futures
+import csv
+import functools
 import importlib
-import types
-import operator
-import re
-import os
-import sys
-import subprocess
 import json
 import math
-import time
+import os
 import random
-import urllib.request
-import urllib.parse
+import re
 import shutil
-import functools
-from datetime import datetime
-import threading
-import concurrent.futures
-import tkinter as tk
-from tkinter import messagebox, simpledialog
-from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
-import csv
-import zipfile
-from datetime import timedelta
-import calendar
 import sqlite3
+import subprocess
+import sys
+import time
+import tkinter as tk
+import urllib.parse
+import urllib.request
+import zipfile
+from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from tkinter import messagebox, simpledialog
+from typing import Any, Dict, List
+
+from .ast_nodes import *
+from .lexer import Lexer
+from .parser_gbp import GeometricBindingParser
+
 try:
     import keyboard
     import mouse
@@ -237,8 +234,6 @@ class Interpreter:
             'keys': lambda d: list(d.keys()),
             'values': lambda d: list(d.values()),
             'items': lambda d: list(d.items()),
-            'wait': time.sleep,
-            'wait': time.sleep,
             'push': self._builtin_push,
             'remove': lambda lst, item: lst.remove(item),
             'Set': set,
@@ -277,7 +272,7 @@ class Interpreter:
                 if isinstance(arg, dict):
                     attrs.update(arg)
                 elif isinstance(arg, str):
-                    if '=' in arg and not ' ' in arg and arg.split('=')[0].isalnum():
+                    if '=' in arg and ' ' not in arg and arg.split('=')[0].isalnum():
                         k, v = arg.split('=', 1)
                         attrs[k] = v
                     else:
@@ -951,8 +946,8 @@ class Interpreter:
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
-        import os
         import importlib
+        import os
         target_path = None
         if os.path.exists(node.path):
              target_path = node.path
@@ -1433,8 +1428,6 @@ class Interpreter:
         if not isinstance(code, str):
             msg = f"execute requires a string, got {type(code).__name__}"
             raise TypeError(msg)
-        from .lexer import Lexer
-        from .parser_gbp import GeometricBindingParser
         lexer = Lexer(code)
         tokens = lexer.tokenize()
         parser = GeometricBindingParser(tokens)
@@ -1919,7 +1912,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.5.3.4 is running!")
+        print("\n  ShellLite Server v0.5.3.4 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt:
