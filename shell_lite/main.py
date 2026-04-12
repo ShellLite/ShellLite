@@ -2,6 +2,11 @@ import json
 import difflib
 import re
 import traceback
+import sys
+import os
+import shutil
+import subprocess
+import urllib.request as request
 from .lexer import Lexer
 from .parser_gbp import GeometricBindingParser
 from .interpreter import Interpreter
@@ -177,8 +182,6 @@ def install_globally():
         print("3. Type 'shl' to verify installation.")
         print("="*50 + "\n")
         input("Press Enter to finish...")
-    except Exception as e:
-        print(f"Installation failed: {e}")
     except Exception as e:
         print(f"Installation failed: {e}")
 def init_project():
