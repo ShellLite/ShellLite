@@ -197,10 +197,34 @@ class Lexer:
                 )
                 pos += 13
                 continue
-            is_the = rest_of_line.startswith('the')
-            if is_the and (len(rest_of_line) == 3 
-                           or not rest_of_line[3].isalnum()):
-                pos += 3
+            elif rest_of_line.startswith('is not in '):
+                self.tokens.append(
+                    Token('NOTIN', 'not in', self.line_number, current_col)
+                )
+                pos += 10
+                continue
+            elif rest_of_line.startswith('is in '):
+                self.tokens.append(
+                    Token('IN', 'in', self.line_number, current_col)
+                )
+                pos += 6
+                continue
+            elif rest_of_line.startswith('not in '):
+                self.tokens.append(
+                    Token('NOTIN', 'not in', self.line_number, current_col)
+                )
+                pos += 7
+                continue
+            noise_words = ('the', 'a', 'an', 'let', 'please')
+            found_noise = False
+            for word in noise_words:
+                if rest_of_line.startswith(word):
+                    word_len = len(word)
+                    if len(rest_of_line) == word_len or not rest_of_line[word_len].isalnum():
+                        pos += word_len
+                        found_noise = True
+                        break
+            if found_noise:
                 continue
             if char == '/':
                 last_type = self.tokens[-1].type if self.tokens else None
