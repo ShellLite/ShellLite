@@ -506,11 +506,20 @@ Usage:
   shl <filename.shl>    Run a ShellLite script
   shl                   Start the interactive REPL
   shl help              Show this help message
+  shl test [dir]        Run .shl test files
   shl compile <file>    Compile a script (Options: --target js)
   shl fmt <file>        Format a script
   shl check <file>      Lint a file (JSON output)
+  shl lsp               Start the Language Server (LSP) over stdio
   shl resolve <file> <line> <col>  Resolve symbol (JSON output)
   shl install           Install ShellLite globally to your system PATH
+
+Optional static typing:
+  x as int = 5          Declare a typed variable
+  x as str = "hello"
+  to add a as int b as int
+    give a + b
+
 For documentation, visit: https://github.com/Shrey-N/ShellDesk
 """)
 def main():
@@ -585,6 +594,9 @@ def main():
                 target_dir = sys.argv[2]
             runner = TestRunner(target_dir)
             runner.discover_and_run()
+        elif cmd == "lsp":
+            from .lsp_server import run_lsp
+            run_lsp()
         elif cmd == "resolve":
             if len(sys.argv) > 4:
                 filename = sys.argv[2]

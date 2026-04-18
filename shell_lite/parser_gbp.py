@@ -433,10 +433,11 @@ class GeometricBindingParser:
         return Return(expr)
     def bind_assignment(self, node: GeoNode) -> Assign:
         """
-        -----Purpose: Binds an Assignment GeoNode to an AST Assign node.
+        -----Purpose: Binds an Assignment GeoNode to an AST Assign/TypedAssign node.
         """
+        tokens = node.tokens
         assign_idx = -1
-        for i, t in enumerate(node.tokens):
+        for i, t in enumerate(tokens):
             if t.type in ('ASSIGN', 'IS', 'BE'):
                 assign_idx = i
                 break
@@ -445,12 +446,20 @@ class GeometricBindingParser:
             raise SyntaxError("Assignment operator missing")
 
         if node.head_token.type == 'MAKE':
-            name = node.tokens[1].value
+            name = tokens[1].value
         else:
-            name = node.tokens[0].value
-
-        expr_tokens = node.tokens[assign_idx + 1:]
+            name = tokens[0].value
+        
+        # Detect optional type hint: x as int = 5
+        # tokens[0]=ID(x), tokens[1]=AS, tokens[2]=ID(int), tokens[3]=ASSIGN
+        type_hint = None
+        if assign_idx >= 3 and tokens[1].type == 'AS':
+            type_hint = tokens[2].value.lower()
+            
+        expr_tokens = tokens[assign_idx + 1:]
         value = self.parse_expr_iterative(expr_tokens)
+        if type_hint:
+            return TypedAssign(name, type_hint, value)
         return Assign(name, value)
         
     def bind_index_assignment(self, node: GeoNode, assign_idx: int) -> Any:
@@ -489,21 +498,36 @@ class GeometricBindingParser:
     def bind_func(self, node: GeoNode) -> FunctionDef:
         """
         -----Purpose: Binds a FUNCTION definition GeoNode to AST FunctionDef.
+                      Supports typed args: `to add a as int b as str`.
         """
         start = 1
         if node.tokens[0].type == 'DEFINE':
             start = 2
         name = node.tokens[start].value
         args = []
-        for t in node.tokens[start + 1:]:
-            if t.type == 'USING':
+        token_slice = node.tokens[start + 1:]
+        i = 0
+        while i < len(token_slice):
+            t = token_slice[i]
+            if t.type == 'USING' or t.type == 'COMMA':
+                i += 1
                 continue
-            if t.type == 'ID':
-                args.append((t.value, None, None))
-            elif t.type == 'COLON':
+            if t.type == 'COLON':
                 break
-            elif t.type == 'COMMA':
-                continue
+            if t.type == 'ID':
+                arg_name = t.value
+                # Check for `arg as type` pattern
+                if (i + 2 < len(token_slice)
+                        and token_slice[i + 1].type == 'AS'
+                        and token_slice[i + 2].type == 'ID'):
+                    type_hint = token_slice[i + 2].value.lower()
+                    args.append((arg_name, None, type_hint))
+                    i += 3
+                else:
+                    args.append((t.value, None, None))
+                    i += 1
+            else:
+                i += 1
         body = self.bind_statement_list(node.children)
         return FunctionDef(name, args, body)
     def bind_alert(self, node: GeoNode) -> Alert:

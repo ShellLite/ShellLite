@@ -40,6 +40,14 @@ class Assign(Node):
     name: str
     value: Node
 @dataclass
+class TypedAssign(Node):
+    """
+    -----Purpose: Represents a typed variable assignment (e.g. x as int = 5).
+    """
+    name: str
+    type_hint: str
+    value: Node
+@dataclass
 class PropertyAssign(Node):
     """
     -----Purpose: Represents an assignment to an object property.

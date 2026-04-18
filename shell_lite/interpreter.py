@@ -497,6 +497,35 @@ class Interpreter:
         value = self.visit(node.value)
         self.current_env.set(node.name, value)
         return value
+
+    # --- TYPE_HINTS maps ShellLite type names to Python types ---
+    _TYPE_MAP = {
+        'int': int, 'integer': int,
+        'float': float, 'decimal': float, 'number': float,
+        'str': str, 'string': str, 'text': str,
+        'bool': bool, 'boolean': bool,
+        'list': list, 'array': list,
+        'dict': dict, 'map': dict,
+    }
+
+    def visit_TypedAssign(self, node: TypedAssign):
+        """
+        -----Purpose: Assigns a value with an optional static type check.
+                      Raises TypeError if the value doesn't match the declared type.
+        """
+        value = self.visit(node.value)
+        expected = self._TYPE_MAP.get(node.type_hint)
+        if expected is not None and not isinstance(value, expected):
+            # Attempt silent coercion for numeric edge cases (e.g. int <- float)
+            try:
+                value = expected(value)
+            except (ValueError, TypeError):
+                raise TypeError(
+                    f"Type error: '{node.name}' declared as '{node.type_hint}' "
+                    f"but got {type(value).__name__} ({value!r})"
+                )
+        self.current_env.set(node.name, value)
+        return value
     def visit_IndexAccess(self, node: IndexAccess):
         """
         -----Purpose: Evaluates an index/key access on list/dict.
