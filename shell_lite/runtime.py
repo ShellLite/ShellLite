@@ -18,8 +18,12 @@ import re
 from datetime import datetime
 import threading
 import concurrent.futures
-import tkinter as tk
-from tkinter import messagebox, simpledialog
+try:
+    import tkinter as tk
+    from tkinter import messagebox, simpledialog
+    _HAS_TK = True
+except ImportError:
+    _HAS_TK = False
 class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
@@ -344,25 +348,34 @@ def slang_color_print(val, color=None, style=None):
     else:
         print(val)
 def slang_alert(msg):
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    messagebox.showinfo("Alert", str(msg))
-    root.destroy()
+    if _HAS_TK:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        messagebox.showinfo("Alert", str(msg))
+        root.destroy()
+    else:
+        print(f"[Alert] {msg}")
 def slang_prompt(prompt):
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    val = simpledialog.askstring("Input", str(prompt))
-    root.destroy()
-    return val if val is not None else ""
+    if _HAS_TK:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        val = simpledialog.askstring("Input", str(prompt))
+        root.destroy()
+        return val if val is not None else ""
+    else:
+        return input(str(prompt) + " ")
 def slang_confirm(prompt):
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    val = messagebox.askyesno("Confirm", str(prompt))
-    root.destroy()
-    return val
+    if _HAS_TK:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        val = messagebox.askyesno("Confirm", str(prompt))
+        root.destroy()
+        return val
+    else:
+        return input(str(prompt) + " (yes/no) ").strip().lower() in ('yes', 'y', '1', 'true')
 def get_std_modules():
     """
     -----Purpose: Returns a mapping of logical module names to their 

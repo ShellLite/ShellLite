@@ -31,6 +31,10 @@ def build_llvm(filename: str):
         f.write(llvm_ir)
     
     print(f"[SUCCESS] Generated LLVM IR: {ll_filename}")
-    print("\nTo compile to executable, you can use Clang:")
-    exe_name = os.path.splitext(filename)[0] + ".exe"
-    print(f"  clang {ll_filename} -o {exe_name}")
+    print("\nTo compile to executable, use Clang:")
+    import sys as _sys
+    exe_ext = '.exe' if _sys.platform == 'win32' else ''
+    exe_name = os.path.splitext(filename)[0] + exe_ext
+    print(f"  clang {ll_filename} -o {exe_name}")
+    if _sys.platform != 'win32':
+        print(f"  chmod +x {exe_name}")

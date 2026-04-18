@@ -70,7 +70,7 @@ def run_repl():
     print("="*40)
     print("Version: v0.05 | Made by Shrey Naithani")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
-    print("Note: Terminal commands (like 'shl install') must be run in CMD/PowerShell, not here.")
+    print("Note: Terminal commands (like 'shl install') must be run outside the REPL.")
     try:
         from prompt_toolkit import PromptSession
         from prompt_toolkit.lexers import PygmentsLexer
@@ -145,39 +145,65 @@ def install_globally():
     print("\n" + "="*50)
     print("  ShellLite Global Installer")
     print("="*50)
-    install_dir = os.path.join(os.environ['LOCALAPPDATA'], 'ShellLite')
+    is_windows = sys.platform == 'win32'
+    if is_windows:
+        install_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'ShellLite')
+        target_exe = os.path.join(install_dir, 'shl.exe')
+    else:
+        install_dir = os.path.expanduser('~/.local/bin')
+        target_exe = os.path.join(install_dir, 'shl')
+
     if not os.path.exists(install_dir):
-        os.makedirs(install_dir)
-    target_exe = os.path.join(install_dir, 'shl.exe')
+        os.makedirs(install_dir, exist_ok=True)
+        
     current_path = sys.executable
     is_frozen = getattr(sys, 'frozen', False)
     try:
         if is_frozen:
-            src_abs = os.path.abspath(current_path).lower()
-            dst_abs = os.path.abspath(target_exe).lower()
-            if src_abs != dst_abs:
+            src_abs = os.path.abspath(current_path)
+            dst_abs = os.path.abspath(target_exe)
+            if src_abs.lower() != dst_abs.lower():
                 try:
                     shutil.copy2(current_path, target_exe)
+                    if not is_windows:
+                        os.chmod(target_exe, 0o755)
                 except Exception as copy_err:
                     print(f"Warning: Could not copy executable: {copy_err}")
-                    print("This is fine if you are running the "
-                          "installed version.")
+                    print("This is fine if you are running the installed version.")
             else:
                 print("Running from install directory, skipping copy.")
         else:
-            print("Error: Installation requires the shl.exe file.")
+            print("Error: Installation requires the frozen shl runtime.")
             return
-        ps_cmd = (
-            f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User");'
-            ' if ($oldPath -notlike "*ShellLite*") {{ '
-            f'[Environment]::SetEnvironmentVariable("Path", '
-            f'"$oldPath;{install_dir}", "User") }}'
-        )
-        subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-        print(f"\n[SUCCESS] ShellLite (v0.5.3.3) is installed!")
+
+        if is_windows:
+            ps_cmd = (
+                f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User");'
+                ' if ($oldPath -notlike "*ShellLite*") {{ '
+                f'[Environment]::SetEnvironmentVariable("Path", '
+                f'"$oldPath;{install_dir}", "User") }}'
+            )
+            subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
+        else:
+            home = os.path.expanduser("~")
+            rc_files = []
+            for rc in ['.bashrc', '.zshrc', '.profile']:
+                rc_path = os.path.join(home, rc)
+                if os.path.exists(rc_path):
+                    rc_files.append(rc_path)
+            
+            export_line = f'export PATH="$PATH:{install_dir}"'
+            for rc in rc_files:
+                with open(rc, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                if install_dir not in content:
+                    with open(rc, 'a', encoding='utf-8') as f:
+                        f.write(f"\n# Added by ShellLite Installer\n{export_line}\n")
+
+        print(f"\n[SUCCESS] ShellLite (v0.6.0) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
-        print("1. Close ALL open terminal windows (CMD, PowerShell, VS Code).")
+        print("1. Close ALL open terminal windows.")
         print("2. Open a NEW terminal.")
         print("3. Type 'shl' to verify installation.")
         print("="*50 + "\n")

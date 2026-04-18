@@ -12,13 +12,17 @@ import sqlite3
 import subprocess
 import sys
 import time
-import tkinter as tk
+try:
+    import tkinter as tk
+    from tkinter import messagebox, simpledialog
+    _HAS_TK = True
+except ImportError:
+    _HAS_TK = False
 import urllib.parse
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from tkinter import messagebox, simpledialog
 from typing import Any, Dict, List
 
 from .ast_nodes import *
@@ -1150,36 +1154,45 @@ class Interpreter:
         return self.visit(node.value)
     def visit_Alert(self, node: Alert):
         """
-        -----Purpose: Displays a GUI alert message box.
+        -----Purpose: Displays a GUI alert message box (or falls back to print).
         """
         msg = self.visit(node.message)
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        messagebox.showinfo("Alert", str(msg))
-        root.destroy()
+        if _HAS_TK:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            messagebox.showinfo("Alert", str(msg))
+            root.destroy()
+        else:
+            print(f"[Alert] {msg}")
     def visit_Prompt(self, node: Prompt):
         """
-        -----Purpose: Displays a GUI text input dialog.
+        -----Purpose: Displays a GUI text input dialog (or falls back to input()).
         """
         prompt = self.visit(node.prompt)
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        val = simpledialog.askstring("Input", str(prompt))
-        root.destroy()
-        return val if val is not None else ""
+        if _HAS_TK:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            val = simpledialog.askstring("Input", str(prompt))
+            root.destroy()
+            return val if val is not None else ""
+        else:
+            return input(str(prompt) + " ")
     def visit_Confirm(self, node: Confirm):
         """
-        -----Purpose: Displays a GUI yes/no confirmation dialog.
+        -----Purpose: Displays a GUI yes/no confirmation dialog (or falls back to input()).
         """
         prompt = self.visit(node.prompt)
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        val = messagebox.askyesno("Confirm", str(prompt))
-        root.destroy()
-        return val
+        if _HAS_TK:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            val = messagebox.askyesno("Confirm", str(prompt))
+            root.destroy()
+            return val
+        else:
+            return input(str(prompt) + " (yes/no) ").strip().lower() in ('yes', 'y', '1', 'true')
     def visit_Spawn(self, node: Spawn):
         """
         -----Purpose: Spawns a background task in a thread pool.
@@ -1521,8 +1534,9 @@ class Interpreter:
         """
         -----Purpose: Initializes and runs a Tkinter-based GUI application.
         """
-        import tkinter as tk
-        from tkinter import messagebox
+        if not _HAS_TK:
+            print("[App] GUI apps require tkinter. Install python3-tk on Linux (sudo apt install python3-tk).")
+            return
         root = tk.Tk()
         root.title(node.title)
         root.geometry(f"{node.width}x{node.height}")
@@ -1557,7 +1571,8 @@ class Interpreter:
         """
         -----Purpose: Creates and renders a UI widget (button, input, etc.).
         """
-        from tkinter import messagebox
+        if not _HAS_TK:
+            return
         parent_ctx = self.ui_parent_stack[-1]
         if isinstance(parent_ctx, tuple):
             parent, layout_mode = parent_ctx

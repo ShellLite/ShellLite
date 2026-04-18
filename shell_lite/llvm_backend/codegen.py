@@ -1,4 +1,5 @@
 from llvmlite import ir
+import sys as _sys
 from ..ast_nodes import *
 class LLVMCompiler:
     def __init__(self):
@@ -7,7 +8,21 @@ class LLVMCompiler:
         -----        runtime functions (printf, malloc, free, etc.).
         """
         self.module = ir.Module(name="shell_lite_module")
-        self.module.triple = "x86_64-pc-windows-msvc"
+        # Detect host triple at runtime for cross-platform support
+        try:
+            import llvmlite.binding as llvm
+            llvm.initialize()
+            llvm.initialize_native_target()
+            llvm.initialize_native_asmprinter()
+            self.module.triple = llvm.get_default_triple()
+        except Exception:
+            # Fallback triples per platform
+            if _sys.platform == 'win32':
+                self.module.triple = 'x86_64-pc-windows-msvc'
+            elif _sys.platform == 'darwin':
+                self.module.triple = 'x86_64-apple-macosx10.15.0'
+            else:
+                self.module.triple = 'x86_64-pc-linux-gnu'
         self.int32 = ir.IntType(32)
         self.char_ptr = ir.IntType(8).as_pointer()
         vptr = ir.IntType(8).as_pointer()
@@ -58,9 +73,9 @@ class LLVMCompiler:
         rwd_ty = ir.FunctionType(ir.VoidType(), [vptr])
         self.rewind = ir.Function(self.module, rwd_ty, name="rewind")
         
-        gst_ty = ir.FunctionType(vptr, [self.int32])
+        gst_ty = ir.FunctionType(vptr, [])
         self.get_stdin = ir.Function(
-            self.module, gst_ty, name="__acrt_iob_func"
+            self.module, gst_ty, name="getchar"
         )
         
         sys_ty = ir.FunctionType(self.int32, [vptr])
