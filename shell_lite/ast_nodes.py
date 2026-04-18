@@ -529,3 +529,18 @@ class Layout(Node):
     """
     layout_type: str
     body: List[Node]
+@dataclass
+class TestBlock(Node):
+    """
+    -----Purpose: Represents a testing block ('test "name"').
+    """
+    name: str
+    body: List[Node]
+@dataclass
+class Assertion(Node):
+    """
+    -----Purpose: Represents a test assertion ('expect x to be y').
+    """
+    left: Node
+    op: str
+    right: Optional[Node] = None

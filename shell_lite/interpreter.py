@@ -2172,3 +2172,30 @@ class Interpreter:
              if include:
                  res.append(i)
         return res
+
+    def visit_TestBlock(self, node: TestBlock):
+        try:
+            for stmt in node.body:
+                self.visit(stmt)
+            print(f"\033[92m[PASS]\033[0m {node.name}")
+        except AssertionError as e:
+            print(f"\033[91m[FAIL]\033[0m {node.name}: {e}")
+        except Exception as e:
+            print(f"\033[91m[ERROR]\033[0m {node.name}: {e}")
+
+    def visit_Assertion(self, node: Assertion):
+        left_val = self.visit(node.left)
+        if node.right is None:
+            if not left_val:
+                raise AssertionError(f"Expected truthy, got {left_val}")
+            return
+            
+        right_val = self.visit(node.right)
+        if node.op == '==':
+            if left_val != right_val:
+                raise AssertionError(f"Expected {right_val}, got {left_val}")
+        elif node.op == '!=':
+            if left_val == right_val:
+                raise AssertionError(f"Expected not {right_val}, got {left_val}")
+        else:
+            raise NotImplementedError(f"Assertion op {node.op} not implemented")

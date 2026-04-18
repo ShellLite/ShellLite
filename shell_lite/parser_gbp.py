@@ -191,6 +191,9 @@ class GeometricBindingParser:
             'LEN': self.bind_expression_statement,
             'KEYS': self.bind_expression_statement,
             'REMOVE': self.bind_remove,
+            'TEST': self.bind_test,
+            'EXPECT': self.bind_assert,
+            'ENSURE': self.bind_assert,
         }
         
         if head_type in bind_map:
@@ -798,6 +801,50 @@ class GeometricBindingParser:
         ]
         return ListVal(items)
 
+    def bind_test(self, node: GeoNode) -> TestBlock:
+        """
+        -----Purpose: Binds a TEST block.
+        """
+        name = "unnamed test"
+        if len(node.tokens) > 1:
+            name_val = self.parse_expr_iterative(node.tokens[1:])
+            if hasattr(name_val, 'value'):
+                name = str(name_val.value)
+        body = self.bind_statement_list(node.children)
+        return TestBlock(name, body)
+
+    def bind_assert(self, node: GeoNode) -> Assertion:
+        """
+        -----Purpose: Binds EXPECT or ENSURE assertions.
+        """
+        tokens = node.tokens
+        to_idx = -1
+        is_not = False
+        op_str = "=="
+        
+        for i, t in enumerate(tokens):
+            if t.type in ('TO', 'IS', 'BE'):
+                to_idx = i
+            if t.type == 'NOT':
+                is_not = True
+                
+        if to_idx == -1:
+            left = self.parse_expr_iterative(tokens[1:])
+            return Assertion(left, "truthy", None)
+            
+        left_tokens = tokens[1:to_idx]
+        if is_not:
+            op_str = "!="
+            
+        right_tokens = []
+        for t in tokens[to_idx+1:]:
+            if t.type not in ('BE', 'NOT'):
+                right_tokens.append(t)
+                
+        left = self.parse_expr_iterative(left_tokens)
+        right = self.parse_expr_iterative(right_tokens) if right_tokens else None
+        
+        return Assertion(left, op_str, right)
     def bind_natural_set(self, node: GeoNode) -> Call:
         """
         -----Purpose: Binds a natural language set ('a unique set of...') GeoNode.

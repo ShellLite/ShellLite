@@ -557,6 +557,13 @@ def main():
             if len(sys.argv) > 2:
                 filename = sys.argv[2]
                 lint_file(filename)
+        elif cmd == "test":
+            from .test_runner import TestRunner
+            target_dir = '.'
+            if len(sys.argv) > 2:
+                target_dir = sys.argv[2]
+            runner = TestRunner(target_dir)
+            runner.discover_and_run()
         elif cmd == "resolve":
             if len(sys.argv) > 4:
                 filename = sys.argv[2]

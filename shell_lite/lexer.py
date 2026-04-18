@@ -347,10 +347,10 @@ class Lexer:
                         'greater': 'GREATER', 'less': 'LESS', 'equal': 'EQUAL',
                         'function': 'FUNCTION',
                         'contains': 'CONTAINS', 'empty': 'EMPTY',
-                        'remove': 'REMOVE',
                         'than': 'THAN',
                         'doing': 'DOING',
                         'long': 'LONG',
+                        'test': 'TEST', 'expect': 'EXPECT', 'ensure': 'ENSURE',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(

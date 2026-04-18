@@ -38,9 +38,9 @@ else
         nodes = self.parse_code(code)
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.If)
-        self.assertEqual(len(nodes[0].else_body), 1)
-        self.assertIsInstance(nodes[0].else_body[0], ast.If)
-        self.assertIsNotNone(nodes[0].else_body[0].else_body) 
+        self.assertEqual(len(nodes[0].else_body), 1) # Contains ELIF block
+        self.assertIsInstance(nodes[0].else_body[0], ast.If) # ELIF is parsed as nested IF
+        self.assertIsNotNone(nodes[0].else_body[0].else_body) # ELSE block
         
     def test_repeat_loop(self):
         nodes = self.parse_code("repeat 5 times\n    say \"hello\"")
