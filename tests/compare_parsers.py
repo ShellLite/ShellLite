@@ -1,14 +1,15 @@
 """
 -----Purpose: Benchmarks the Geometric Binding Parser (GBP) performance.
 """
-import sys
 import os
+import sys
 import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
+
 
 def benchmark(filename):
     """

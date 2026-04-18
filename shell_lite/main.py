@@ -1,16 +1,16 @@
 import json
-import difflib
-import re
-import traceback
-import sys
 import os
+import re
 import shutil
 import subprocess
-import urllib.request as request
+import sys
+import traceback
+
+from .ast_nodes import *
+from .interpreter import Interpreter
 from .lexer import Lexer
 from .parser_gbp import GeometricBindingParser
-from .interpreter import Interpreter
-from .ast_nodes import *
+
 
 def execute_source(source: str, interpreter: Interpreter):
     """
@@ -74,8 +74,8 @@ def run_repl():
     try:
         from prompt_toolkit import PromptSession
         from prompt_toolkit.lexers import PygmentsLexer
-        from pygments.lexers.shell import BashLexer
         from prompt_toolkit.styles import Style
+        from pygments.lexers.shell import BashLexer
         style = Style.from_dict({
             'prompt': '#ansigreen bold',
         })
@@ -200,7 +200,7 @@ def install_globally():
                     with open(rc, 'a', encoding='utf-8') as f:
                         f.write(f"\n# Added by ShellLite Installer\n{export_line}\n")
 
-        print(f"\n[SUCCESS] ShellLite (v0.6.0) is installed!")
+        print("\n[SUCCESS] ShellLite (v0.6.0) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows.")
@@ -284,11 +284,10 @@ def install_package(package_name: str, branch: str = "main"):
     base_url = f"https://github.com/{user}/{repo}/archive/refs/heads"
     zip_url = f"{base_url}/{branch}.zip"
     try:
-        import tempfile
-        import urllib.request as request
-        import zipfile
         import io
         import shutil
+        import urllib.request as request
+        import zipfile
         print(f"Downloading {zip_url}...")
         try:
             with request.urlopen(zip_url) as response:
@@ -541,16 +540,12 @@ def main():
                 print("Usage: shl compile <filename> [--target js]")
         elif cmd == "llvm":
              if len(sys.argv) > 2:
-                 try:
-                     import llvmlite
+                 import importlib.util
+                 if importlib.util.find_spec("llvmlite") is None:
+                     print("Error: 'llvmlite' is required for LLVM backend. Run: pip install llvmlite")
+                 else:
                      from .llvm_backend.builder import build_llvm
                      build_llvm(sys.argv[2])
-                 except ImportError:
-                     msg = (
-                         "Error: 'llvmlite' is required for LLVM backend. "
-                         "Run: pip install llvmlite"
-                     )
-                     print(msg)
              else:
                  print("Usage: shl llvm <filename>")
         elif cmd == "help" or cmd == "--help" or cmd == "-h":

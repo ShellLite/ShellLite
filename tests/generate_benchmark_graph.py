@@ -1,6 +1,8 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import os
+
+import matplotlib.pyplot as plt
+
+
 def generate_benchmark_graph():
     labels = ['Interpreted Mode', 'LLVM JIT (Compiled)']
     times = [28.5, 0.001]

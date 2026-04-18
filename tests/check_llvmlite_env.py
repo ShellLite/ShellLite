@@ -1,5 +1,6 @@
 import sys
 import traceback
+
 print(f"Python Executable: {sys.executable}")
 print(f"Python Version: {sys.version}")
 print("\n--- Checking llvmlite ---")

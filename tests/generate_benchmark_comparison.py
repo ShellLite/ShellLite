@@ -1,6 +1,9 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+
+
 def generate_comparison_graphs():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     plt.style.use('default')

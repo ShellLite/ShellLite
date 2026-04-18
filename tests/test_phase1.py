@@ -7,14 +7,16 @@ Tests:
 3. Lexer bracket_depth tracking
 4. Parser stability
 """
-import sys
 import os
-import time
 import statistics
+import sys
+import time
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.interpreter import Interpreter
+
 PASSED = 0
 FAILED = 0
 def check_passing(name, condition):

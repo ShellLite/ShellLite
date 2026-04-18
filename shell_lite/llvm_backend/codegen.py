@@ -1,6 +1,10 @@
-from llvmlite import ir
 import sys as _sys
+
+from llvmlite import ir
+
 from ..ast_nodes import *
+
+
 class LLVMCompiler:
     def __init__(self):
         """

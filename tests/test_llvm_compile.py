@@ -1,16 +1,17 @@
 """
 -----Purpose: Integration tests for the LLVM compilation path.
 """
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from shell_lite.lexer import Lexer
-    from shell_lite.parser_gbp import GeometricBindingParser
-    from shell_lite.llvm_backend.codegen import LLVMCompiler
     import llvmlite.binding as llvm
+
+    from shell_lite.lexer import Lexer
+    from shell_lite.llvm_backend.codegen import LLVMCompiler
+    from shell_lite.parser_gbp import GeometricBindingParser
 
     def test_llvm_compilation():
         """

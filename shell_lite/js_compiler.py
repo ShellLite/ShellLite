@@ -1,4 +1,6 @@
 from .ast_nodes import *
+
+
 class JSCompiler:
     def __init__(self):
         """

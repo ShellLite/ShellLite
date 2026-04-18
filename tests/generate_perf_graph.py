@@ -1,11 +1,15 @@
-import sys
 import os
+import sys
 import time
+
 import matplotlib.pyplot as plt
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from shell_lite.lexer import Lexer
 from shell_lite.parser import Parser
+
+from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
+
 HAS_LLVM = False
 try:
     from shell_lite.llvm_backend.codegen import LLVMCompiler
@@ -16,7 +20,7 @@ def generate_large_file(lines=1000):
     code = "x = 0\n"
     for i in range(lines):
         code += f"if x < {i}:\n"
-        code += f"    x = x + 1\n"
+        code += "    x = x + 1\n"
     return code
 def run_benchmark():
     sizes = [1000, 5000, 10000, 20000, 50000]

@@ -1,11 +1,15 @@
-import sys
 import os
-import time
 import statistics
+import sys
+import time
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from shell_lite.lexer import Lexer
 from shell_lite.parser import Parser
+
+from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
+
+
 def benchmark(filename, iterations=10):
     with open(filename, 'r') as f:
         source = f.read()
@@ -34,12 +38,12 @@ def benchmark(filename, iterations=10):
     rd_stdev = statistics.stdev(rd_times) if len(rd_times) > 1 else 0
     gbp_mean = statistics.mean(gbp_times)
     gbp_stdev = statistics.stdev(gbp_times) if len(gbp_times) > 1 else 0
-    print(f"Recursive Descent:")
+    print("Recursive Descent:")
     print(f"  Mean: {rd_mean:.4f}s (+/- {rd_stdev:.4f}s)")
     print(f"  Min:  {min(rd_times):.4f}s")
     print(f"  Max:  {max(rd_times):.4f}s")
     print()
-    print(f"Geometric-Binding Parser:")
+    print("Geometric-Binding Parser:")
     print(f"  Mean: {gbp_mean:.4f}s (+/- {gbp_stdev:.4f}s)")
     print(f"  Min:  {min(gbp_times):.4f}s")
     print(f"  Max:  {max(gbp_times):.4f}s")

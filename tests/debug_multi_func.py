@@ -1,9 +1,11 @@
 import sys
+
 sys.path.insert(0, '.')
+from shell_lite.ast_nodes import Call, FunctionDef
+from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.interpreter import Interpreter
-from shell_lite.ast_nodes import FunctionDef, Call
+
 source = """to first
 begin
 say "1"

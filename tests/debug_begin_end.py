@@ -1,8 +1,10 @@
 import sys
+
 sys.path.insert(0, '.')
+from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.interpreter import Interpreter
+
 source = '''to greet
 begin
 say "Hello World"

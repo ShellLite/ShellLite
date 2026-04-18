@@ -1,7 +1,7 @@
 import os
-import time
 import subprocess
-import sys
+import time
+
 SHL_CMD = ["python", "shell_lite/main.py"]
 def run_benchmark():
     print("Generating LLVM IR...")

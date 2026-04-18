@@ -1,18 +1,22 @@
-import sys
-import os
-import time
 import ctypes
+import os
+import sys
+import time
+
 import llvmlite.binding as llvm
+
 try:
-    from llvmlite.binding.orcjit import create_lljit_compiler, JITLibraryBuilder
+    from llvmlite.binding.orcjit import JITLibraryBuilder, create_lljit_compiler
 except ImportError:
     import llvmlite.binding.orcjit as orc
     create_lljit_compiler = orc.create_lljit_compiler
     JITLibraryBuilder = orc.JITLibraryBuilder
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from shell_lite.lexer import Lexer
-from shell_lite.parser_gbp import GeometricBindingParser
 from shell_lite.llvm_backend.codegen import LLVMCompiler
+from shell_lite.parser_gbp import GeometricBindingParser
+
+
 def compile_and_run_jit(source_code):
     llvm.initialize_native_target()
     llvm.initialize_native_asmprinter()

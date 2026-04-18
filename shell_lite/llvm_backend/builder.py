@@ -1,8 +1,9 @@
 import os
-import llvmlite.binding as llvm
-from .codegen import LLVMCompiler
+
 from ..lexer import Lexer
 from ..parser_gbp import GeometricBindingParser as Parser
+from .codegen import LLVMCompiler
+
 
 def build_llvm(filename: str):
     """

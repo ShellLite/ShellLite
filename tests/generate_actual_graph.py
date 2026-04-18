@@ -1,9 +1,10 @@
-import sys
 import os
-import time
-import matplotlib.pyplot as plt
 import subprocess
-import llvmlite.binding as llvm
+import sys
+import time
+
+import matplotlib.pyplot as plt
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 try:
     from tests.run_jit import compile_and_run_jit

@@ -1,9 +1,10 @@
 import os
-import glob
 import time
+
+from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.interpreter import Interpreter
+
 
 class TestRunner:
     def __init__(self, directory='.'):
@@ -14,7 +15,7 @@ class TestRunner:
         self.total_time = 0.0
 
     def discover_and_run(self):
-        print(f"\n\033[1mShellLite Test Runner v0.6\033[0m")
+        print("\n\033[1mShellLite Test Runner v0.6\033[0m")
         print(f"Discovering tests in {os.path.abspath(self.directory)}...\n")
         
         file_paths = []
@@ -82,7 +83,7 @@ class TestRunner:
     def print_summary(self):
         total = self.passed + self.failed + self.errors
         print("\n" + "="*50)
-        print(f"\033[1mTest Summary\033[0m")
+        print("\033[1mTest Summary\033[0m")
         print("="*50)
         print(f"Executed: {total} tests in {self.total_time:.3f}s")
         if self.passed > 0:

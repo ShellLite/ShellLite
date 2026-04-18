@@ -1,8 +1,8 @@
 """
 -----Purpose: CLI entry point wrapper for the ShellLite compiler.
 """
-import sys
 import os
+import sys
 
 if getattr(sys, 'frozen', False):
     base_dir = sys._MEIPASS

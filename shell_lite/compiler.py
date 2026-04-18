@@ -1,8 +1,9 @@
-import ast
-from typing import List
-from .ast_nodes import *
-from .runtime import get_std_modules
 import random
+from typing import List
+
+from .ast_nodes import *
+
+
 class Compiler:
     """
     -----Purpose: Compiles the custom AST nodes down to executing Python source code.
@@ -301,7 +302,7 @@ class Compiler:
     def visit_Repeat(self, node: Repeat):
         return self.visit_For(For(node.count, node.body))
     def visit_Forever(self, node: Forever):
-        code = f"while True:\n"
+        code = "while True:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
@@ -371,7 +372,7 @@ class Compiler:
         if node.op == 'copy':
              return f"slang_clipboard_copy({self.visit(node.content)})"
         else:
-             return f"slang_clipboard_paste()"
+             return "slang_clipboard_paste()"
     def visit_AutomationOp(self, node: AutomationOp):
         args = [self.visit(a) for a in node.args]
         if node.action == 'press': return f"slang_press({args[0]})"
@@ -392,7 +393,7 @@ class Compiler:
         return f"slang_file_read({self.visit(node.path)})"
     def visit_DatabaseOp(self, node: DatabaseOp):
         if node.op == 'open': return f"slang_db_open({self.visit(node.args[0])})"
-        if node.op == 'close': return f"slang_db_close()"
+        if node.op == 'close': return "slang_db_close()"
         if node.op == 'exec':
              params = self.visit(node.args[1]) if len(node.args) > 1 else "[]"
              return f"slang_db_exec({self.visit(node.args[0])}, {params})"
@@ -403,7 +404,7 @@ class Compiler:
     def visit_Every(self, node: Every):
         interval = self.visit(node.interval)
         if node.unit == 'minutes': interval = f"({interval} * 60)"
-        code = f"while True:\n"
+        code = "while True:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         code += f"\n{self.indent()}time.sleep({interval})"
@@ -530,7 +531,7 @@ class Compiler:
         base = base.replace('.py', '')
         return f"import {base} as {node.alias}"
     def visit_Try(self, node: Try):
-        code = f"try:\n"
+        code = "try:\n"
         self.indentation += 1
         code += self.compile_block(node.try_body)
         self.indentation -= 1
@@ -540,7 +541,7 @@ class Compiler:
         self.indentation -= 1
         return code
     def visit_TryAlways(self, node: TryAlways):
-        code = f"try:\n"
+        code = "try:\n"
         self.indentation += 1
         code += self.compile_block(node.try_body)
         self.indentation -= 1
@@ -589,10 +590,10 @@ class Compiler:
         port = self.visit(node.port)
         code = f"server_address = ('', {port})\n"
         h_setup = (
-            f"httpd = HTTPServer(server_address, ShellLiteHTTPHandler)"
+            "httpd = HTTPServer(server_address, ShellLiteHTTPHandler)"
         )
         code += f"{self.indent()}{h_setup}\n"
-        prnt = f"print(f'Serving on port {{server_address[1]}}...')"
+        prnt = "print(f'Serving on port {server_address[1]}...')"
         code += f"{self.indent()}{prnt}\n"
         code += f"{self.indent()}httpd.serve_forever()"
         return code

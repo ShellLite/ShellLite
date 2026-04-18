@@ -1,23 +1,23 @@
-from typing import Any, Dict, List, Optional
-import os
-import sys
-import subprocess
 import json
 import math
+import os
+import subprocess
+import sys
+from typing import Any, Dict, List
+
 """
 -----Purpose: Standard built-in functionality and library wrappers for the 
               Shell-Lite execution runtime.
 """
-import time
-import random
-import urllib.request
-import urllib.parse
-import shutil
 import functools
+import random
 import re
+import shutil
+import time
+import urllib.parse
+import urllib.request
 from datetime import datetime
-import threading
-import concurrent.futures
+
 try:
     import tkinter as tk
     from tkinter import messagebox, simpledialog
@@ -279,6 +279,7 @@ def slang_file_read(path):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 import sqlite3
+
 _slang_db_conn = None
 def slang_db_open(path):
     """

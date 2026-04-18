@@ -1,8 +1,10 @@
-import sys
 import os
-import time
-import matplotlib.pyplot as plt
 import subprocess
+import sys
+import time
+
+import matplotlib.pyplot as plt
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 def run_benchmark():
     iterations = 1000000

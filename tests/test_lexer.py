@@ -1,13 +1,14 @@
 """
 -----Purpose: Unit tests for the Lexer.
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from shell_lite.lexer import Lexer, Token
+from shell_lite.lexer import Lexer
+
 
 class TestLexer(unittest.TestCase):
     """

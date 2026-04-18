@@ -1,11 +1,14 @@
-import sys
-import os
 import cProfile
-import pstats
 import io
+import os
+import pstats
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
+
+
 def profile_gbp(filename):
     with open(filename, 'r') as f:
         source = f.read()
