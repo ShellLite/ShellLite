@@ -146,6 +146,24 @@ class GeometricBindingParser:
                     self.root_nodes.append(current_node)
             else:
                 current_node.tokens.append(token)
+    
+    def _set_node_loc(self, ast_node: Node, geo_node: GeoNode):
+        """Helper to set location on an AST node from a GeoNode."""
+        if not ast_node or not isinstance(ast_node, Node):
+            return ast_node
+        ast_node.line = geo_node.line
+        ast_node.col = geo_node.head_token.column
+        # Determine end line/col from children or tokens
+        if geo_node.children:
+            last_child = geo_node.children[-1]
+            ast_node.end_line = last_child.line # Simplified, better logic would be recursive
+            ast_node.end_col = 999 
+        elif geo_node.tokens:
+            last_tok = geo_node.tokens[-1]
+            ast_node.end_line = last_tok.line
+            ast_node.end_col = last_tok.column + len(str(last_tok.value))
+        return ast_node
+
     def bind_node(self, node: GeoNode) -> Node:
         """
         -----Purpose: Semantic Binding Dispatcher. Converts a topological 
@@ -199,22 +217,27 @@ class GeometricBindingParser:
             'ENSURE': self.bind_assert,
         }
         
+        
         if head_type in bind_map:
-            return bind_map[head_type](node)
+            ast_node = bind_map[head_type](node)
+            return self._set_node_loc(ast_node, node)
             
         if head_type == 'BEFORE' and len(node.tokens) > 1:
             if node.tokens[1].type == 'REQUEST':
-                return self.bind_middleware(node)
+                ast_node = self.bind_middleware(node)
+                return self._set_node_loc(ast_node, node)
                 
         if head_type == 'ID':
             val = node.head_token.value.lower()
             if val == 'a' and len(node.tokens) > 1:
                 t1 = node.tokens[1].type
                 if t1 == 'LIST':
-                    return self.bind_natural_list(node)
+                    ast_node = self.bind_natural_list(node)
+                    return self._set_node_loc(ast_node, node)
                 if t1 == 'UNIQUE' and len(node.tokens) > 2:
                     if node.tokens[2].type == 'SET':
-                        return self.bind_natural_set(node)
+                        ast_node = self.bind_natural_set(node)
+                        return self._set_node_loc(ast_node, node)
             
             # Check for regular assignment (x = 1) or index assignment (x[0] = 1)
             assign_idx = -1
@@ -225,12 +248,16 @@ class GeometricBindingParser:
             
             if assign_idx != -1:
                 if len(node.tokens) > 1 and node.tokens[1].type == 'LBRACKET':
-                    return self.bind_index_assignment(node, assign_idx)
-                return self.bind_assignment(node)
+                    ast_node = self.bind_index_assignment(node, assign_idx)
+                else:
+                    ast_node = self.bind_assignment(node)
+                return self._set_node_loc(ast_node, node)
             
-            return self.bind_call_or_expr(node)
+            ast_node = self.bind_call_or_expr(node)
+            return self._set_node_loc(ast_node, node)
             
-        return self.bind_expression_statement(node)
+        ast_node = self.bind_expression_statement(node)
+        return self._set_node_loc(ast_node, node)
 
     def bind_expression_statement(self, node: GeoNode) -> Node:
         """
@@ -449,8 +476,6 @@ class GeometricBindingParser:
             name = tokens[1].value
         else:
             name = tokens[0].value
-        
-        # Detect optional type hint: x as int = 5
         # tokens[0]=ID(x), tokens[1]=AS, tokens[2]=ID(int), tokens[3]=ASSIGN
         type_hint = None
         if assign_idx >= 3 and tokens[1].type == 'AS':
@@ -1064,9 +1089,18 @@ class GeometricBindingParser:
                 val = Number(
                     int(t.value) if '.' not in t.value else float(t.value)
                 )
+                val.line = t.line
+                val.col = t.column
+                val.end_line = t.line
+                val.end_col = t.column + len(str(t.value))
                 values.append(val)
             elif t.type == 'STRING':
-                values.append(String(t.value))
+                val = String(t.value)
+                val.line = t.line
+                val.col = t.column
+                val.end_line = t.line
+                val.end_col = t.column + len(t.value) + 2 # +2 for quotes
+                values.append(val)
             elif t.type == 'LBRACKET':
                 is_indexing = False
                 if i > 0 and tokens[i - 1].type in ('ID', 'RBRACKET', 'RPAREN', 'STRING'):
@@ -1099,10 +1133,24 @@ class GeometricBindingParser:
                 if is_indexing:
                     obj = values.pop() if values else None
                     if items:
-                        values.append(IndexAccess(obj, items[0]))
+                        node_idx = IndexAccess(obj, items[0])
+                        node_idx.line = t.line
+                        node_idx.col = t.column
+                        values.append(node_idx)
                 else:
-                    values.append(ListVal(items))
-                i = j
+                    node_list = ListVal(items)
+                    node_list.line = t.line
+                    node_list.col = t.column
+                    values.append(node_list)
+                i = j + 1
+                continue
+            elif t.type == 'ID':
+                val = VarAccess(t.value)
+                val.line = t.line
+                val.col = t.column
+                val.end_line = t.line
+                val.end_col = t.column + len(t.value)
+                values.append(val)
             elif t.type == 'LBRACE':
                 depth = 1
                 j = i + 1

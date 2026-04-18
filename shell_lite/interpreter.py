@@ -497,8 +497,6 @@ class Interpreter:
         value = self.visit(node.value)
         self.current_env.set(node.name, value)
         return value
-
-    # --- TYPE_HINTS maps ShellLite type names to Python types ---
     _TYPE_MAP = {
         'int': int, 'integer': int,
         'float': float, 'decimal': float, 'number': float,
@@ -516,7 +514,6 @@ class Interpreter:
         value = self.visit(node.value)
         expected = self._TYPE_MAP.get(node.type_hint)
         if expected is not None and not isinstance(value, expected):
-            # Attempt silent coercion for numeric edge cases (e.g. int <- float)
             try:
                 value = expected(value)
             except (ValueError, TypeError):

@@ -8,6 +8,9 @@ class Node:
     -----Purpose: Base class for all Abstract Syntax Tree nodes.
     """
     line: int = field(default=0, init=False)
+    col: int = field(default=0, init=False)
+    end_line: int = field(default=0, init=False)
+    end_col: int = field(default=0, init=False)
 @dataclass
 class Number(Node):
     """
@@ -42,7 +45,7 @@ class Assign(Node):
 @dataclass
 class TypedAssign(Node):
     """
-    -----Purpose: Represents a typed variable assignment (e.g. x as int = 5).
+    -----Purpose: Represents a typed variable assignment
     """
     name: str
     type_hint: str
