@@ -104,14 +104,14 @@ pip install shell-lite
 ### From Source
 
 ```bash
-git clone https://github.com/Shrey-N/ShellLite.git
+git clone https://github.com/ShellLite/ShellLite.git
 cd ShellLite
 pip install -e .
 ```
 
 ### Windows Installer
 
-Download the latest `shl.exe` from the [Releases](https://github.com/Shrey-N/ShellLite/releases) page.
+Download the latest `shl.exe` from the [Releases](https://github.com/ShellLite/ShellLite/releases) page.
 
 ### Verify Installation
 
@@ -350,7 +350,7 @@ name = "my-app"
 version = "1.0.0"
 
 [dependencies]
-Shrey-N/shl-utils = "main"
+ShellLite/shl-utils = "main"
 ```
 
 ---
@@ -431,7 +431,7 @@ my-project/
 | Tool | Description | Link |
 |:-----|:------------|:-----|
 | **Book** | Language design, compiler construction, and architecture guide | [Book](https://books2read.com/b/mVpoXM) |
-| **ShellDesk** | Official IDE for ShellLite | [GitHub](https://github.com/Shrey-N/ShellDesk) |
+| **ShellDesk** | Official IDE for ShellLite | [GitHub](https://github.com/ShellLite/ShellLite) |
 | **VS Code Extension** | Syntax highlighting and snippets | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ShellLite.shelllite-hello) |
 | **Research Artifact** | Published on Zenodo by CERN | [Zenodo](https://doi.org/10.5281/zenodo.18228699) |
 | **Research Artifact - Geometric Binding Parser** | Published on Zenodo by CERN | [Zenodo](https://doi.org/10.5281/zenodo.18385614) |

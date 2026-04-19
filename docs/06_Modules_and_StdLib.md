@@ -330,8 +330,8 @@ version = "1.0.0"
 description = "My ShellLite application"
 
 [dependencies]
-Shrey-N/shl-utils = "main"
-Shrey-N/shl-http = "v1.0"
+ShellLite/shl-utils = "main"
+ShellLite/shl-http = "v1.0"
 ```
 
 Then run:

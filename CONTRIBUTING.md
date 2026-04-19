@@ -58,7 +58,7 @@ Please verify that the core and advanced features work as expected before submit
 ## Pull Request Process
 
 1. Push your branch to GitHub.
-2. Open a Pull Request against the `main` branch of `Shrey-N/ShellLite`.
+2. Open a Pull Request against the `main` branch of `ShellLite/ShellLite`.
 3. Describe your changes detailedly.
 4. Wait for review!
 

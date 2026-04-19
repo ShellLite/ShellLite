@@ -12,7 +12,7 @@ class Token:
     Represents a lexical token
 
     Attributes:
-        type (str): The classification of the token (e.g., 'NUMBER', 'STRING', 'IF').
+        type (str): The classification of the token
         value (str): The literal string value of the token from the source code.
         line (int): The line number where the token appears.
         column (int): The starting column of the token.
@@ -29,8 +29,8 @@ class Token:
         assert isinstance(self.column, int) and self.column > 0, "Token column must be a positive integer"
 class Lexer:
     """
-    -----Purpose: Tokenizes raw source code strings into discrete Token structs.
-                  Produces a list of Tokens from raw source code while managing 
+    -----Purpose: Tokenizes source code strings into discrete Token structs.
+                  Produces a list of Tokens from source code while managing 
                   indentation levels.
     """
     
@@ -353,6 +353,19 @@ class Lexer:
                         'doing': 'DOING',
                         'long': 'LONG',
                         'test': 'TEST', 'expect': 'EXPECT', 'ensure': 'ENSURE',
+                        # Epic 3: Concurrency
+                        'parallel': 'PARALLEL', 'gather': 'GATHER',
+                        'lock': 'LOCK', 'channel': 'CHANNEL',
+                        'send': 'SEND', 'receive': 'RECEIVE',
+                        # Epic 5: ORM
+                        'model': 'MODEL', 'create': 'CREATE',
+                        'table': 'TABLE', 'insert': 'INSERT',
+                        'find': 'FIND', 'update': 'UPDATE',
+                        'delete': 'DELETE', 'where': 'WHERE',
+                        'count': 'COUNT',
+                        'maximum': 'MAX', 'minimum': 'MIN', 'of': 'OF',
+                        'clamped': 'CLAMPED', 'between': 'BETWEEN',
+                        'lerp': 'LERP', 'from': 'FROM', 'to': 'TO', 'by': 'BY',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(

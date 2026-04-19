@@ -68,7 +68,7 @@ def run_repl():
     interpreter = Interpreter()
     print("\n" + "="*40)
     print("="*40)
-    print("Version: v0.05 | Made by Shrey Naithani")
+    print("Version: v0.6")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run outside the REPL.")
     try:
@@ -264,6 +264,97 @@ def install_all_dependencies():
     for repo, branch in deps.items():
         install_package(repo, branch=branch)
 
+def show_package_info(package_name: str):
+    """
+    -----Purpose: Displays metadata for an installed package by 
+    -----        reading its 'shell-lite.toml' file.
+    """
+    home = os.path.expanduser("~")
+    modules_dir = os.path.join(home, ".shell_lite", "modules")
+    pkg_path = os.path.join(modules_dir, package_name)
+    toml_path = os.path.join(pkg_path, "shell-lite.toml")
+    
+    if not os.path.exists(pkg_path):
+        print(f"Error: Package '{package_name}' is not installed.")
+        return
+    
+    print(f"\nPackage Info: {package_name}")
+    print("-" * 40)
+    if os.path.exists(toml_path):
+        try:
+            with open(toml_path, 'r') as f:
+                content = f.read()
+                def get_field(key):
+                    m = re.search(fr'{key}\s*=\s*"(.*?)"', content)
+                    return m.group(1) if m else "Unknown"
+                
+                print(f"  Version:     {get_field('version')}")
+                print(f"  Description: {get_field('description')}")
+                print(f"  Authors:     {get_field('authors')}")
+        except Exception as e:
+            print(f"  Error reading metadata: {e}")
+    else:
+        print("  No 'shell-lite.toml' metadata found.")
+    print("-" * 40 + "\n")
+
+def list_packages():
+    """
+    -----Purpose: Lists all ShellLite modules currently installed in the 
+    -----        local modules directory.
+    """
+    home = os.path.expanduser("~")
+    modules_dir = os.path.join(home, ".shell_lite", "modules")
+    if not os.path.exists(modules_dir) or not os.listdir(modules_dir):
+        print("No packages installed in 'The Universe' yet.")
+        return
+    print("\nInstalled Packages in The Universe:")
+    print("-" * 40)
+    for folder in os.listdir(modules_dir):
+        pkg_path = os.path.join(modules_dir, folder)
+        if os.path.isdir(pkg_path):
+            print(f"  [v0.6] {folder}")
+    print("-" * 40)
+
+def search_package(query=None):
+    """
+    -----Purpose: Searches GitHub for repositories tagged with 'shell-lite'
+    -----        or 'ShellLite'. Displays stars and last update time.
+    """
+    import urllib.request as request
+    import json
+    
+    tag_query = "topic:shell-lite+topic:ShellLite"
+    if query:
+        tag_query = f"{query}+topic:shell-lite+topic:ShellLite"
+        
+    import urllib.parse
+    encoded_query = urllib.parse.quote(tag_query.replace('+', ' '))
+    url = f"https://api.github.com/search/repositories?q={encoded_query}&sort=stars&order=desc"
+    print(f"Searching The Universe for '{query or 'all'}'...")
+    
+    try:
+        req = request.Request(url, headers={'User-Agent': 'ShellLite-CLI'})
+        with request.urlopen(req) as response:
+            data = json.loads(response.read().decode())
+        
+        items = data.get('items', [])
+        if not items:
+            print("No matching packages found in The Universe.")
+            return
+
+        print("\n" + "="*85)
+        print(f"{'Package (User/Repo)':<30} | {'Stars':<6} | {'Updated':<12} | {'Description'}")
+        print("-" * 85)
+        for item in items[:10]:
+            name = item['full_name']
+            stars = item['stargazers_count']
+            updated = item['updated_at'].split('T')[0]
+            desc = (item['description'] or "")[:30]
+            print(f"{name:<30} | {stars:<6} | {updated:<12} | {desc}")
+        print("="*85 + "\n")
+    except Exception as e:
+        print(f"Search failed: {e}")
+
 def install_package(package_name: str, branch: str = "main"):
     """
     -----Purpose: Downloads and extracts a specific GitHub repository into 
@@ -274,7 +365,11 @@ def install_package(package_name: str, branch: str = "main"):
         print(msg)
         return
     user, repo = package_name.split('/')
-    print(f"Fetching '{package_name}' ({branch}) from GitHub...")
+    print("\n" + "="*50)
+    print(f"  Fetching: {package_name}")
+    print(f"  Branch:   {branch}")
+    print("="*50)
+    
     home = os.path.expanduser("~")
     modules_dir = os.path.join(home, ".shell_lite", "modules")
     if not os.path.exists(modules_dir):
@@ -283,6 +378,7 @@ def install_package(package_name: str, branch: str = "main"):
     
     base_url = f"https://github.com/{user}/{repo}/archive/refs/heads"
     zip_url = f"{base_url}/{branch}.zip"
+    print(f"  -> Locating package at {zip_url}...")
     try:
         import io
         import shutil
@@ -327,6 +423,15 @@ def compile_file(filename: str, target: str = 'llvm'):
         tokens = lexer.tokenize()
         parser = GeometricBindingParser(tokens)
         statements = parser.parse()
+        
+        # Enforce Safe Mode for compilation
+        from .compiler_utils import ensure_safe
+        try:
+            ensure_safe(statements)
+        except PermissionError as e:
+            print(f"Compilation Error: {e}")
+            return
+
         if target.lower() == 'js':
             from .js_compiler import JSCompiler
             compiler = JSCompiler()
@@ -340,6 +445,16 @@ def compile_file(filename: str, target: str = 'llvm'):
             except ImportError:
                 print("Error: 'llvmlite' is required for LLVM compilation.")
                 return
+        elif target.lower() == 'wasm':
+            from .wasm_builder import WASMBuilder
+            builder = WASMBuilder()
+            builder.build(statements, os.path.splitext(os.path.basename(filename))[0])
+            return
+        elif target.lower() == 'c':
+            from .c_compiler import CCompiler
+            compiler = CCompiler()
+            code = compiler.compile(statements)
+            ext = '.c'
         else:
             from .compiler import Compiler
             compiler = Compiler()
@@ -507,12 +622,15 @@ Usage:
   shl                   Start the interactive REPL
   shl help              Show this help message
   shl test [dir]        Run .shl test files
-  shl compile <file>    Compile a script (Options: --target js)
+  shl compile <file>    Compile a script (Options: --target js|python|c|wasm, --safe)
   shl fmt <file>        Format a script
   shl check <file>      Lint a file (JSON output)
   shl lsp               Start the Language Server (LSP) over stdio
   shl resolve <file> <line> <col>  Resolve symbol (JSON output)
   shl install           Install ShellLite globally to your system PATH
+  shl search [query]    Search for packages in 'The Universe'
+  shl list              List installed packages
+  shl --safe            Run in Safe Mode (restricts FS/DB/System)
 
 Optional static typing:
   x as int = 5          Declare a typed variable
@@ -520,7 +638,7 @@ Optional static typing:
   to add a as int b as int
     give a + b
 
-For documentation, visit: https://github.com/Shrey-N/ShellDesk
+For documentation, visit: https://github.com/ShellLite/ShellLite
 """)
 def main():
     """
@@ -529,6 +647,11 @@ def main():
     """
     if len(sys.argv) > 1:
         cmd = sys.argv[1]
+        safe_mode = '--safe' in sys.argv
+        if safe_mode:
+            os.environ["SHL_SAFE"] = "1"
+            sys.argv.remove('--safe')
+        
         if cmd == "compile" or cmd == "build":
             if len(sys.argv) > 2:
                 filename = sys.argv[2]
@@ -560,13 +683,23 @@ def main():
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "--version" or cmd == "-v":
-             print("ShellLite v0.5.3.3")
+             print("ShellLite v0.6")
         elif cmd == "get":
             if len(sys.argv) > 2:
                 package_name = sys.argv[2]
                 install_package(package_name)
             else:
                 print("Usage: shl get <user/repo>")
+        elif cmd == "search":
+            query = sys.argv[2] if len(sys.argv) > 2 else None
+            search_package(query)
+        elif cmd == "list":
+            list_packages()
+        elif cmd == "info":
+            if len(sys.argv) > 2:
+                show_package_info(sys.argv[2])
+            else:
+                print("Usage: shl info <package_name>")
         elif cmd == "init":
             init_project()
         elif cmd == "install":
@@ -605,7 +738,15 @@ def main():
                 resolve_cursor(filename, line, col)
         elif cmd == "run":
             if len(sys.argv) > 2:
-                run_file(sys.argv[2])
+                filename = sys.argv[2]
+                if not os.path.exists(filename):
+                    print(f"Error: File '{filename}' not found.")
+                    return
+                with open(filename, 'r', encoding='utf-8') as f:
+                    source = f.read()
+                interpreter = Interpreter()
+                interpreter.safe_mode = safe_mode
+                execute_source(source, interpreter)
             else:
                 print("Usage: shl run <filename>")
         else:

@@ -97,6 +97,39 @@ class JSCompiler:
         return f"{{ {', '.join(items)} }}"
     def visit_Await(self, node):
         return f"await {self.visit(node.task)}"
+    
+    # --- Epic 3: Concurrency (JS Async/Await) ---
+    def visit_Parallel(self, node: Parallel):
+        body = "[\n"
+        self.indent_level += 1
+        for stmt in node.body:
+            body += "  " * self.indent_level + f"(async () => {{ {self.visit(stmt)} }})(),\n"
+        self.indent_level -= 1
+        body += "  " * self.indent_level + "]"
+        return f"Promise.all({body})"
+
+    def visit_Gather(self, node):
+        return f"await Promise.all({self.visit(node.tasks)})"
+
+    def visit_Lock(self, node):
+        # JS is single-threaded, so 'lock' is just a normal block sequence.
+        body = "{\n"
+        self.indent_level += 1
+        for stmt in node.body:
+            body += "  " * self.indent_level + self.visit(stmt) + "\n"
+        self.indent_level -= 1
+        body += "  " * self.indent_level + "}"
+        return body
+
+    def visit_Channel(self, node):
+        return "[]" # Simple queue implementation
+
+    def visit_Send(self, node):
+        return f"{self.visit(node.channel)}.push({self.visit(node.value)})"
+
+    def visit_Receive(self, node):
+        return f"{self.visit(node.channel)}.shift()"
+
     def visit_Get(self, node):
         pass
     def visit_Try(self, node):

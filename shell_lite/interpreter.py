@@ -11,6 +11,8 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
+import queue
 import time
 
 try:
@@ -71,6 +73,16 @@ class Environment:
             raise RuntimeError(f"Constant '{name}' already declared")
         self.variables[name] = value
         self.constants.add(name)
+class Namespace:
+    def __init__(self, name, members):
+        self._name = name
+        self._members = members
+    def __getattr__(self, key):
+        if key in self._members: return self._members[key]
+        raise AttributeError(f"Module '{self._name}' has no member '{key}'")
+    def __getitem__(self, key): return self._members[key]
+    def __repr__(self): return f"<Module '{self._name}'>"
+
 class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
@@ -83,9 +95,6 @@ class ShellLiteError(Exception):
         self.message = message
         super().__init__(message)
 class LambdaFunction:
-    """
-    -----Purpose: Encapsulates an anonymous function with lexical closure support.
-    """
     def __init__(self, params: List[str], body, interpreter):
         self.params = params
         self.body = body
@@ -155,9 +164,10 @@ class WebBuilder:
             pass
 class Interpreter:
     """
-    -----Purpose: The core tree-walking interpreter that executes AST nodes.
+    -----Purpose: The core tree walking interpreter that executes AST nodes.
     """
     def __init__(self):
+        self.safe_mode = os.environ.get("SHL_SAFE") == "1"
         self.global_env = Environment()
         self.global_env.set('str', str)
         self.global_env.set('int', int)
@@ -180,6 +190,9 @@ class Interpreter:
         self.static_routes = {}
         self.web = WebBuilder(self)
         self.db_conn = None
+        self._shared_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        self._named_locks: Dict[str, threading.Lock] = {}
+        self.models: Dict[str, 'ModelDef'] = {}
         self.builtins = {
             'str': str, 'int': int, 'float': float, 'bool': bool,
             'list': list, 'len': len,
@@ -193,8 +206,7 @@ class Interpreter:
             'print': print,
             'add': self._builtin_smart_add,
             'ask': input,
-            'abs': abs, 'min': min, 'max': max,
-            'round': round, 'pow': pow, 'sum': sum,
+            'print': print,
             'split': self._builtin_split,
             'join': lambda lst, d="": d.join(str(x) for x in lst),
             'replace': lambda s, old, new: s.replace(old, new),
@@ -246,6 +258,20 @@ class Interpreter:
             'say': print,
             'today': lambda: datetime.now().strftime("%Y-%m-%d"),
         }
+        self.math_members = {
+            'abs': abs, 'min': min, 'max': max,
+            'round': round, 'pow': pow, 'sum': sum,
+            'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+            'floor': math.floor, 'ceil': math.ceil, 'sqrt': math.sqrt,
+            'log': math.log, 'log10': math.log10, 'exp': math.exp,
+            'pi': math.pi, 'e': math.e,
+            'lerp': lambda a, b, t: a + (b - a) * t,
+            'clamp': lambda v, lo, hi: max(lo, min(v, hi))
+        }
+        
+        self._init_std_modules()
+
+
         tags = [
             'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
             'span', 'a', 'img', 'button', 'input', 'form',
@@ -265,7 +291,6 @@ class Interpreter:
             def now(self):
                 return str(int(time.time()))
         self.builtins['time'] = TimeWrapper()
-        self._init_std_modules()
         for k, v in self.builtins.items():
             self.global_env.set(k, v)
     def _make_tag_fn(self, tag_name):
@@ -322,78 +347,43 @@ class Interpreter:
             raise TypeError(f"Cannot add to {type(target).__name__}")
     def _init_std_modules(self):
         self.std_modules = {
-            'math': {
-                'sin': math.sin,
-                'cos': math.cos,
-                'tan': math.tan,
-                'sqrt': math.sqrt,
-                'floor': math.floor,
-                'ceil': math.ceil,
-                'abs': abs,
-                'pow': pow,
-                'log': math.log,
-                'log10': math.log10,
-                'exp': math.exp,
-                'random': random.random,
-                'randint': random.randint,
-                'pi': math.pi,
-                'e': math.e,
-            },
-            'time': {
+            'math': Namespace('math', self.math_members),
+            'time': Namespace('time', {
                 'time': time.time,
                 'sleep': time.sleep,
                 'date': lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'year': lambda: datetime.now().year,
                 'month': lambda: datetime.now().month,
                 'day': lambda: datetime.now().day,
-                'hour': lambda: datetime.now().hour,
-                'minute': lambda: datetime.now().minute,
-                'second': lambda: datetime.now().second,
-            },
-            'http': {
+            }),
+            'http': Namespace('http', {
                 'get': self._http_get,
                 'post': self._http_post
-            },
-            'env': {
+            }),
+            'env': Namespace('env', {
                 'get': lambda k, d=None: os.environ.get(k, d),
                 'set': lambda k, v: os.environ.__setitem__(k, str(v)),
                 'all': lambda: dict(os.environ),
-                'has': lambda k: k in os.environ,
-            },
-            'args': {
-                'get': lambda i: sys.argv[i+1] if i+1 < len(sys.argv) else None,
-                'all': lambda: sys.argv[1:],
-                'count': lambda: len(sys.argv) - 1,
-            },
-            'path': {
+            }),
+            'path': Namespace('path', {
                 'join': os.path.join,
                 'basename': os.path.basename,
-                'dirname': os.path.dirname,
                 'exists': os.path.exists,
-                'isfile': os.path.isfile,
                 'isdir': os.path.isdir,
                 'abspath': os.path.abspath,
-                'split': os.path.split,
-                'ext': lambda p: os.path.splitext(p)[1],
-            },
-            'color': {
+            }),
+            'color': Namespace('color', {
                 'red': lambda s: f"\033[91m{s}\033[0m",
                 'green': lambda s: f"\033[92m{s}\033[0m",
-                'yellow': lambda s: f"\033[93m{s}\033[0m",
                 'blue': lambda s: f"\033[94m{s}\033[0m",
-                'magenta': lambda s: f"\033[95m{s}\033[0m",
-                'cyan': lambda s: f"\033[96m{s}\033[0m",
                 'bold': lambda s: f"\033[1m{s}\033[0m",
-                'underline': lambda s: f"\033[4m{s}\033[0m",
                 'reset': "\033[0m",
-            },
-            're': {
+            }),
+            're': Namespace('re', {
                 'match': lambda p, s: bool(re.match(p, s)),
                 'search': lambda p, s: re.search(p, s).group() if re.search(p, s) else None,
                 'replace': lambda p, r, s: re.sub(p, r, s),
-                'findall': lambda p, s: re.findall(p, s),
-                'split': lambda p, s: re.split(p, s),
-            },
+            }),
         }
     def _http_get(self, url):
         with urllib.request.urlopen(url) as response:
@@ -421,6 +411,14 @@ class Interpreter:
             raise e
     def generic_visit(self, node: Node):
         raise Exception(f'No visit_{type(node).__name__} method')
+    def visit_statement_list(self, statements: List[Node]):
+        """
+        -----Purpose: Executes a list of statements in order.
+        """
+        results = []
+        for stmt in statements:
+            results.append(self.visit(stmt))
+        return results[-1] if results else None
     def visit_Number(self, node: Number):
         """
         -----Purpose: Returns the value of a numeric literal node.
@@ -549,6 +547,23 @@ class Interpreter:
         """
         -----Purpose: Evaluates a binary operation between two nodes.
         """
+        if node.op == 'DOT':
+            left = self.visit(node.left)
+            if isinstance(node.right, VarAccess):
+                attr = node.right.name
+                if hasattr(left, attr): return getattr(left, attr)
+                if hasattr(left, 'get'): return left.get(attr)
+                raise AttributeError(f"Member '{attr}' not found on {left}")
+            elif isinstance(node.right, Call):
+                func = None
+                attr = node.right.name
+                if hasattr(left, attr): func = getattr(left, attr)
+                elif hasattr(left, 'get'): func = left.get(attr)
+                if not func: raise AttributeError(f"Method '{attr}' not found")
+                args = [self.visit(a) for a in node.right.args]
+                return func(*args)
+            raise SyntaxError(f"Invalid member access: {node.right}")
+
         left = self.visit(node.left)
         right = self.visit(node.right)
         try:
@@ -1020,7 +1035,10 @@ class Interpreter:
             return
         try:
             py_module = importlib.import_module(node.path)
-            self.current_env.set(node.path, py_module)
+            # Wrap in Namespace for clean access
+            members = {k: getattr(py_module, k) for k in dir(py_module) if not k.startswith('_')}
+            ns = Namespace(node.path, members)
+            self.current_env.set(node.path, ns)
             return
         except ImportError:
             pass
@@ -1061,35 +1079,14 @@ class Interpreter:
              return self._find_method(parent_def, method_name)
         return None
     def builtin_run(self, cmd):
-        """
-        -----Purpose: Executes a system command and returns its output.
-        """
-        try:
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"Command Error: {result.stderr}")
-            return result.stdout.strip()
-        except Exception as e:
-            raise RuntimeError(f"Failed to run command: {e}")
+        if self.safe_mode: raise PermissionError("System execution is disabled in Safe Mode")
+        return subprocess.check_output(cmd, shell=True).decode()
     def builtin_read(self, path):
-        """
-        -----Purpose: Reads the content of a file from the filesystem.
-        """
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            raise RuntimeError(f"Failed to read file '{path}': {e}")
+        if self.safe_mode: raise PermissionError("File reading is disabled in Safe Mode")
+        with open(path, 'r') as f: return f.read()
     def builtin_write(self, path, content):
-        """
-        -----Purpose: Writes content to a file on the filesystem.
-        """
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(str(content))
-            return True
-        except Exception as e:
-            raise RuntimeError(f"Failed to write file '{path}': {e}")
+        if self.safe_mode: raise PermissionError("File writing is disabled in Safe Mode")
+        with open(path, 'w') as f: f.write(content)
     def builtin_json_parse(self, json_str):
         """
         -----Purpose: Parses a JSON string into a ShellLite object/list.
@@ -1222,11 +1219,9 @@ class Interpreter:
             return input(str(prompt) + " (yes/no) ").strip().lower() in ('yes', 'y', '1', 'true')
     def visit_Spawn(self, node: Spawn):
         """
-        -----Purpose: Spawns a background task in a thread pool.
+        -----Purpose: Spawns a background task using the shared thread pool.
         """
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(self.visit, node.call)
-        return future
+        return self._shared_executor.submit(self.visit, node.call)
     def visit_Await(self, node: Await):
         """
         -----Purpose: Awaits the result of an asynchronous task.
@@ -1234,8 +1229,7 @@ class Interpreter:
         task = self.visit(node.task)
         if isinstance(task, concurrent.futures.Future):
             return task.result()
-        msg = f"Cannot await non-task object: {type(task)}"
-        raise TypeError(msg)
+        return task # Graceful fallback for non-futures
     def visit_Regex(self, node: Regex):
         """
         -----Purpose: Compiles and returns a regular expression object.
@@ -1287,10 +1281,6 @@ class Interpreter:
         iterable = self.visit(node.iterable)
         if not hasattr(iterable, '__iter__'):
             raise TypeError(f"Cannot iterate over {type(iterable).__name__}")
-        
-        # Note: We do not create a new Environment here by default 
-        # to allow for loop variables to persist or update parent scope.
-        # But we do need to handle Skip/Stop.
         for item in iterable:
             self.current_env.set(node.var_name, item)
             try:
@@ -1356,18 +1346,17 @@ class Interpreter:
             return list(s)
         return s.split(delimiter)
     def visit_PythonImport(self, node: PythonImport):
-        """
-        -----Purpose: Imports a raw Python module into the global environment.
-        """
+        name = node.module_name
+        if name in self.std_modules:
+            alias = node.alias or name
+            self.current_env.variables[alias] = self.std_modules[name]
+            return
         try:
-            mod = importlib.import_module(node.module_name)
-            name = node.alias if node.alias else node.module_name.split('.')[0]
-            self.global_env.set(name, mod)
-        except ImportError as e:
-            msg = (
-                f"Could not import python module '{node.module_name}': {e}"
-            )
-            raise RuntimeError(msg)
+            mod = importlib.import_module(name)
+            alias = node.alias or name
+            self.current_env.variables[alias] = mod
+        except ImportError:
+            raise ImportError(f"Cannot find module '{name}'")
     def visit_FromImport(self, node: FromImport):
         """
         -----Purpose: Imports specific attributes from a Python module.
@@ -1743,19 +1732,16 @@ class Interpreter:
                 print(f"Progress: [{'='*20}] 100%           ")
     def visit_DatabaseOp(self, node: DatabaseOp):
         """
-        -----Purpose: Performs database operations (open, query, etc.).
+        -----Purpose: Performs database operations with Safe Mode checks.
         """
+        if self.safe_mode: raise PermissionError("Database operations are disabled in Safe Mode")
         if node.op == 'open':
             path = self.visit(node.args[0])
             self.db_conn = sqlite3.connect(path, check_same_thread=False)
-            return self.db_conn
-        elif node.op == 'close':
-            if self.db_conn:
-                self.db_conn.close()
-                self.db_conn = None
+            self.db_conn.row_factory = sqlite3.Row
+            return True
         elif node.op == 'exec':
-            if not self.db_conn:
-                raise RuntimeError("Database not open. Use 'db open \"path\"' first.")
+            if not self.db_conn: raise RuntimeError("Database not open")
             sql = self.visit(node.args[0])
             params = [self.visit(arg) for arg in node.args[1:]]
             cursor = self.db_conn.cursor()
@@ -1763,9 +1749,7 @@ class Interpreter:
             self.db_conn.commit()
             return cursor.lastrowid
         elif node.op == 'query':
-            if not self.db_conn:
-                msg = "Database not open. Use 'db open \"path\"' first."
-                raise RuntimeError(msg)
+            if not self.db_conn: raise RuntimeError("Database not open")
             sql = self.visit(node.args[0])
             params = [self.visit(arg) for arg in node.args[1:]]
             cursor = self.db_conn.cursor()
@@ -1773,10 +1757,225 @@ class Interpreter:
             desc = cursor.description
             columns = [d[0] for d in desc] if desc else []
             rows = cursor.fetchall()
-            result = []
-            for row in rows:
-                result.append(dict(zip(columns, row)))
-            return result
+            return [dict(zip(columns, row)) for row in rows]
+        elif node.op == 'close':
+            if self.db_conn:
+                self.db_conn.close()
+                self.db_conn = None
+            return True
+
+    def visit_ModelDef(self, node: ModelDef):
+        self.classes[node.name] = node
+        return None
+
+    def visit_CreateTable(self, node: CreateTable):
+        if not self.db_conn: raise RuntimeError("Database not open")
+        model = self.classes.get(node.model_name)
+        if not model: raise NameError(f"Model '{node.model_name}' not defined")
+        fields = []
+        for f_name, f_type in model.fields:
+            sql_type = "TEXT"
+            if f_type == "int": sql_type = "INTEGER"
+            elif f_type == "float": sql_type = "REAL"
+            fields.append(f"{f_name} {sql_type}")
+        sql = f"CREATE TABLE IF NOT EXISTS {node.model_name} ({', '.join(fields)})"
+        self.db_conn.execute(sql)
+        self.db_conn.commit()
+        return True
+
+    def visit_InsertRecord(self, node: InsertRecord):
+        if not self.db_conn: raise RuntimeError("Database not open")
+        placeholders = ", ".join(["?"] * len(node.values))
+        cols = ", ".join([v[0] for v in node.values])
+        vals = [self.visit(v[1]) for v in node.values]
+        sql = f"INSERT INTO {node.model_name} ({cols}) VALUES ({placeholders})"
+        cursor = self.db_conn.cursor()
+        cursor.execute(sql, vals)
+        self.db_conn.commit()
+        return cursor.lastrowid
+
+    def visit_FindRecords(self, node: FindRecords):
+        if not self.db_conn: raise RuntimeError("Database not open")
+        base = "SELECT COUNT(*)" if node.is_count else "SELECT *"
+        sql = f"{base} FROM {node.model_name}"
+        params = []
+        if node.conditions:
+            conds = []
+            for col, op, val in node.conditions:
+                conds.append(f"{col} {op} ?")
+                params.append(self.visit(val))
+            sql += " WHERE " + " AND ".join(conds)
+        
+        cursor = self.db_conn.cursor()
+        cursor.execute(sql, params)
+        if node.is_count:
+            res = cursor.fetchone()
+            return res[0] if res else 0
+        
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    def visit_Parallel(self, node: Parallel):
+        """
+        -----Purpose: Executes body statements concurrently using the shared executor.
+        """
+        futures = []
+        for stmt in node.body:
+            futures.append(self._shared_executor.submit(self.visit, stmt))
+        return futures
+
+    def visit_Gather(self, node: Gather):
+        """
+        -----Purpose: Waits for a list of futures to complete and returns results.
+        """
+        futures = self.visit(node.tasks)
+        if not isinstance(futures, list):
+            futures = [futures]
+        
+        results = []
+        for f in futures:
+            if isinstance(f, concurrent.futures.Future):
+                results.append(f.result())
+            else:
+                results.append(f)
+        return results
+
+    def visit_Lock(self, node: Lock):
+        """
+        -----Purpose: Acquires a named global lock for the duration of the block.
+        """
+        if node.name not in self._named_locks:
+            self._named_locks[node.name] = threading.Lock()
+        
+        with self._named_locks[node.name]:
+            # Use the newly defined visit_statement_list
+            return self.visit_statement_list(node.body)
+
+    def visit_Channel(self, node: Channel):
+        """
+        -----Purpose: Creates a new thread-safe queue.
+        """
+        return queue.Queue()
+
+    def visit_Send(self, node: Send):
+        """
+        -----Purpose: Pushes a value into a channel (queue).
+        """
+        q = self.visit(node.channel)
+        val = self.visit(node.value)
+        if isinstance(q, queue.Queue):
+            q.put(val)
+        return val
+
+    def visit_Receive(self, node: Receive):
+        """
+        -----Purpose: Pulls a value from a channel (blocking).
+        """
+        q = self.visit(node.channel)
+        if isinstance(q, queue.Queue):
+            return q.get()
+        return None
+
+    def visit_ModelDef(self, node: ModelDef):
+        """
+        -----Purpose: Registers a model definition.
+        """
+        self.models[node.name] = node
+        return node
+
+    def visit_CreateTable(self, node: CreateTable):
+        """
+        -----Purpose: Generates and executes SQL to create a table from a model.
+        """
+        model = self.models.get(node.model_name)
+        if not model:
+            raise RuntimeError(f"Model '{node.model_name}' not defined.")
+        
+        field_defs = []
+        for name, ftype in model.fields:
+            sql_type = "TEXT"
+            if ftype in ('int', 'integer'): sql_type = "INTEGER"
+            elif ftype in ('float', 'number'): sql_type = "REAL"
+            field_defs.append(f"{name} {sql_type}")
+        
+        sql = f"CREATE TABLE IF NOT EXISTS {node.model_name} ({', '.join(field_defs)})"
+        return self.visit(DatabaseOp('exec', [String(sql)]))
+
+    def visit_InsertRecord(self, node: InsertRecord):
+        """
+        -----Purpose: Inserts a record into a model-backed table using parameterized queries.
+        """
+        if not self.db_conn: raise RuntimeError("Database not open")
+        fields = [v[0] for v in node.values]
+        vals = [self.visit(v[1]) for v in node.values]
+        placeholders = ", ".join(["?"] * len(vals))
+        
+        sql = f"INSERT INTO {node.model_name} ({', '.join(fields)}) VALUES ({placeholders})"
+        cursor = self.db_conn.cursor()
+        cursor.execute(sql, vals)
+        self.db_conn.commit()
+        return cursor.lastrowid
+
+    def visit_FindRecords(self, node: FindRecords):
+        """
+        -----Purpose: Executes a 'find' ORM query, optionally performing a COUNT.
+        """
+        table_name = node.model_name
+        sql = f"SELECT {'COUNT(*)' if node.is_count else '*'} FROM {table_name}"
+        params = []
+        if node.conditions:
+            where_clauses = []
+            for field, op_name, val_node in node.conditions:
+                val = self.visit(val_node)
+                where_clauses.append(f"{field} {op_name} ?")
+                params.append(val)
+            sql += " WHERE " + " AND ".join(where_clauses)
+        
+        if not self.db_conn:
+             raise RuntimeError("Database not open")
+        c = self.db_conn.cursor()
+        c.execute(sql, params)
+        if node.is_count:
+            res = c.fetchone()
+            if isinstance(res, dict): return list(res.values())[0]
+            return res[0] if res else 0
+        return c.fetchall()
+
+    def visit_UpdateRecords(self, node: UpdateRecords):
+        """
+        -----Purpose: Updates records in a model-backed table.
+        """
+        set_strs = []
+        for field, val_node in node.updates:
+            val = self.visit(val_node)
+            if isinstance(val, str): val = f"'{val}'"
+            set_strs.append(f"{field} = {val}")
+        
+        sql = f"UPDATE {node.model_name} SET {', '.join(set_strs)}"
+        if node.conditions:
+            cond_strs = []
+            for field, op, val_node in node.conditions:
+                val = self.visit(val_node)
+                if isinstance(val, str): val = f"'{val}'"
+                cond_strs.append(f"{field} {op} {val}")
+            sql += f" WHERE {' AND '.join(cond_strs)}"
+            
+        return self.visit(DatabaseOp('exec', [String(sql)]))
+
+    def visit_DeleteRecords(self, node: DeleteRecords):
+        """
+        -----Purpose: Deletes records from a model-backed table.
+        """
+        sql = f"DELETE FROM {node.model_name}"
+        if node.conditions:
+            cond_strs = []
+            for field, op, val_node in node.conditions:
+                val = self.visit(val_node)
+                if isinstance(val, str): val = f"'{val}'"
+                cond_strs.append(f"{field} {op} {val}")
+            sql += f" WHERE {' AND '.join(cond_strs)}"
+            
+        return self.visit(DatabaseOp('exec', [String(sql)]))
     def visit_ServeStatic(self, node: ServeStatic):
         """
         -----Purpose: Registers a folder to serve static files over HTTP.
@@ -1829,8 +2028,11 @@ class Interpreter:
         self.http_routes.append((path_str, compiled, node.body))
     def visit_Listen(self, node: Listen):
         """
-        -----Purpose: Starts the built-in HTTP server on a specified port.
+        -----Purpose: Starts the built-in HTTP server on a specified port. 
+        -----        Restricted in Safe Mode.
         """
+        if self.safe_mode: raise PermissionError("Web server is disabled in Safe Mode")
+
         port_val = self.visit(node.port)
         interpreter_ref = self
         class ReusableHTTPServer(ThreadingHTTPServer):
@@ -1954,49 +2156,18 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print("\n  ShellLite Server v0.5.3.4 is running!")
+        print("\n  ShellLite Server v0.6 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt:
             print("\n  Server stopped.")
             pass
-    def visit_DatabaseOp(self, node: DatabaseOp):
-        if node.op == 'open':
-            path = self.visit(node.args[0])
-            self.db_conn = sqlite3.connect(path)
-            self.db_conn.row_factory = lambda c, r: {col[0]: r[idx] for idx, col in enumerate(c.description)}
-            return True
-        elif node.op == 'close':
-            if self.db_conn:
-                self.db_conn.close()
-                self.db_conn = None
-            return True
-        elif node.op == 'exec':
-            if not self.db_conn: raise RuntimeError("Database not open")
-            sql = self.visit(node.args[0])
-            params = []
-            if len(node.args) > 1:
-                val = self.visit(node.args[1])
-                params = val if isinstance(val, list) else [val]
-            c = self.db_conn.cursor()
-            c.execute(sql, params)
-            self.db_conn.commit()
-            return c.lastrowid
-        elif node.op == 'query':
-            if not self.db_conn:
-                raise RuntimeError("Database not open")
-            sql = self.visit(node.args[0])
-            params = []
-            if len(node.args) > 1:
-                val = self.visit(node.args[1])
-                params = val if isinstance(val, list) else [val]
-            c = self.db_conn.cursor()
-            c.execute(sql, params)
-            return c.fetchall()
     def visit_Download(self, node: Download):
         """
-        -----Purpose: Downloads a file from a URL to the local filesystem.
+        -----Purpose: Downloads a file from a URL to the local filesystem. 
+        -----        Restricted in Safe Mode.
         """
+        if self.safe_mode: raise PermissionError("Downloads are disabled in Safe Mode")
         url = self.visit(node.url)
         filename = url.split('/')[-1] or "downloaded_file"
         print(f"Downloading {filename}...")
@@ -2005,16 +2176,14 @@ class Interpreter:
                  with open(filename, 'wb') as f:
                      shutil.copyfileobj(response, f)
              print(f"Download complete: {filename}")
-        except urllib.error.URLError as e:
-             print(f"Error: Could not connect to {url}. Reason: {e}")
-        except PermissionError:
-             print(f"Error: Permission denied writing to {filename}.")
         except Exception as e:
              print(f"Error: Download failed: {e}")
+
     def visit_ArchiveOp(self, node: ArchiveOp):
         """
-        -----Purpose: Compresses or extracts ZIP archives.
+        -----Purpose: Compresses or extracts ZIP archives. Restricted in Safe Mode.
         """
+        if self.safe_mode: raise PermissionError("Archive operations are disabled in Safe Mode")
         source = str(self.visit(node.source))
         target = str(self.visit(node.target))
         try:
@@ -2024,18 +2193,12 @@ class Interpreter:
                     with zipfile.ZipFile(target, 'w') as zipf:
                         zipf.write(source, arcname=os.path.basename(source))
                 elif os.path.isdir(source):
-                    shutil.make_archive(
-                        target.replace('.zip', ''), 'zip', source
-                    )
+                    shutil.make_archive(target.replace('.zip', ''), 'zip', source)
                 else:
                     print(f"Error: Source '{source}' does not exist.")
                     return
-                print("Compression complete.")
-            else:
+            elif node.op == 'extract':
                 print(f"Extracting '{source}' to '{target}'...")
-                if not os.path.exists(source):
-                    print(f"Error: Archive '{source}' does not exist.")
-                    return
                 with zipfile.ZipFile(source, 'r') as zipf:
                     zipf.extractall(target)
                 print("Extraction complete.")
@@ -2081,6 +2244,7 @@ class Interpreter:
                     print(f"Saved {len(rows)} rows to '{path}'.")
                 except Exception as e:
                     print(f"Error saving CSV: {e}")
+
     def visit_ClipboardOp(self, node: ClipboardOp):
         """
         -----Purpose: Accesses the system clipboard (copy/paste).
@@ -2096,7 +2260,9 @@ class Interpreter:
     def visit_AutomationOp(self, node: AutomationOp):
         """
         -----Purpose: Performs hardware automation tasks (keyboard, mouse).
+        -----        Restricted in Safe Mode.
         """
+        if self.safe_mode: raise PermissionError("Automation is disabled in Safe Mode")
         args = [self.visit(a) for a in node.args]
         if node.action == 'press':
              if 'keyboard' not in sys.modules:
@@ -2142,8 +2308,9 @@ class Interpreter:
         return s
     def visit_FileWrite(self, node: FileWrite):
         """
-        -----Purpose: Writes or appends content to a file.
+        -----Purpose: Writes or appends content to a file. Restricted in Safe Mode.
         """
+        if self.safe_mode: raise PermissionError("File writing is disabled in Safe Mode")
         path = str(self.visit(node.path))
         content = str(self.visit(node.content))
         try:
@@ -2155,15 +2322,15 @@ class Interpreter:
             raise RuntimeError(msg)
     def visit_FileRead(self, node: FileRead):
         """
-        -----Purpose: Reads the entire content of a file.
+        -----Purpose: Reads the entire content of a file. Restricted in Safe Mode.
         """
+        if self.safe_mode: raise PermissionError("File reading is disabled in Safe Mode")
         path = str(self.visit(node.path))
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 return f.read()
         except FileNotFoundError:
              raise FileNotFoundError(f"File '{path}' not found.")
-             raise RuntimeError(f"Read failed: {e}")
     def _builtin_upper(self, s, only_letters=False):
         """
         -----Purpose: Builtin helper to convert string to uppercase.
@@ -2173,6 +2340,7 @@ class Interpreter:
         if only_letters:
              return re.sub(r'[^a-zA-Z\s]', '', s).upper()
         return s.upper()
+
     def _builtin_sum_range(self, start, end, condition=None):
         """
         -----Purpose: Builtin helper to sum a range with optional filtering.
@@ -2196,6 +2364,7 @@ class Interpreter:
              if include:
                  total += i
         return total
+
     def _builtin_range_list(self, start, end, condition=None):
         res = []
         s = int(start)
@@ -2241,3 +2410,37 @@ class Interpreter:
                 raise AssertionError(f"Expected not {right_val}, got {left_val}")
         else:
             raise NotImplementedError(f"Assertion op {node.op} not implemented")
+
+    def visit_MaxNode(self, node: MaxNode):
+        """
+        -----Purpose: Evaluates the maximum of two expressions or a list.
+        """
+        left_val = self.visit(node.left)
+        if node.right:
+            right_val = self.visit(node.right)
+            return max(left_val, right_val)
+        else:
+            if isinstance(left_val, (list, tuple)) and left_val:
+                return max(left_val)
+            return left_val
+
+    def visit_MinNode(self, node: MinNode):
+        """
+        -----Purpose: Evaluates the minimum of two expressions.
+        """
+        val1 = self.visit(node.left)
+        if node.right:
+            return min(val1, self.visit(node.right))
+        return min(val1)
+
+    def visit_ClampNode(self, node: ClampNode):
+        v = self.visit(node.value)
+        lo = self.visit(node.min_val)
+        hi = self.visit(node.max_val)
+        return max(lo, min(v, hi))
+
+    def visit_LerpNode(self, node: LerpNode):
+        a = self.visit(node.start)
+        b = self.visit(node.end)
+        t = self.visit(node.alpha)
+        return a + (b - a) * t

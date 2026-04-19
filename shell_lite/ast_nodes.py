@@ -557,3 +557,120 @@ class Assertion(Node):
     left: Node
     op: str
     right: Optional[Node] = None
+
+@dataclass
+class Parallel(Node):
+    """
+    -----Purpose: Represents a 'parallel' block that runs children concurrently.
+    """
+    body: List[Node]
+@dataclass
+class Gather(Node):
+    """
+    -----Purpose: Represents a 'gather' expression that awaits all futures.
+    """
+    tasks: Node
+@dataclass
+class Lock(Node):
+    """
+    -----Purpose: Represents a 'lock' block with a named mutex.
+    """
+    name: str
+    body: List[Node]
+@dataclass
+class Channel(Node):
+    """
+    -----Purpose: Represents a channel constructor expression.
+    """
+    pass
+@dataclass
+class Send(Node):
+    """
+    -----Purpose: Represents a 'send' statement to push a value into a channel.
+    """
+    channel: Node
+    value: Node
+@dataclass
+class Receive(Node):
+    """
+    -----Purpose: Represents a 'receive' expression to pull a value from a channel.
+    """
+    channel: Node
+
+@dataclass
+class ModelDef(Node):
+    """
+    -----Purpose: Represents an ORM model definition.
+    """
+    name: str
+    fields: List[tuple]
+@dataclass
+class CreateTable(Node):
+    """
+    -----Purpose: Represents a 'create table' statement from a model.
+    """
+    model_name: str
+@dataclass
+class InsertRecord(Node):
+    """
+    -----Purpose: Represents an 'insert' statement into a model table.
+    """
+    model_name: str
+    values: List[tuple]
+@dataclass
+class FindRecords(Node):
+    """
+    -----Purpose: Represents a 'find' query on a model table.
+    """
+    model_name: str
+    conditions: List[tuple]
+    find_all: bool = True
+    is_count: bool = False
+@dataclass
+class UpdateRecords(Node):
+    """
+    -----Purpose: Represents an 'update' statement on a model table.
+    """
+    model_name: str
+    conditions: List[tuple]
+    updates: List[tuple]
+@dataclass
+class DeleteRecords(Node):
+    """
+    -----Purpose: Represents a 'delete' statement on a model table.
+    """
+    model_name: str
+    conditions: List[tuple]
+@dataclass
+class MaxNode(Node):
+    """
+    -----Purpose: Represents a 'maximum of a and b' or 'maximum of list' expression.
+    """
+    left: Node
+    right: Optional[Node] = None
+
+@dataclass
+class MinNode(Node):
+    """
+    -----Purpose: Represents a 'minimum of a and b' or 'minimum of list' expression.
+    """
+    left: Node
+    right: Optional[Node] = None
+
+@dataclass
+class ClampNode(Node):
+    """
+    -----Purpose: Represents a 'clamped X between min and max' expression.
+    """
+    value: Node
+    min_val: Node
+    max_val: Node
+
+@dataclass
+class LerpNode(Node):
+    """
+    -----Purpose: Represents a 'lerp from A to B by T' expression.
+    """
+    start: Node
+    end: Node
+    alpha: Node

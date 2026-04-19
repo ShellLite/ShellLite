@@ -582,7 +582,81 @@ class Compiler:
             return f"_executor.submit({node.call.name}, {', '.join(args)})"
         return f"_executor.submit({self.visit(node.call)})"
     def visit_Await(self, node: Await):
-        return f"{self.visit(node.task)}.result()"
+        task = self.visit(node.task)
+        return f"( {task}.result() if hasattr({task}, 'result') else {task} )"
+    
+    # --- Epic 3: Concurrency ---
+    def visit_Parallel(self, node: Parallel):
+        code = "[\n"
+        self.indentation += 1
+        for stmt in node.body:
+            code += f"{self.indent()}_executor.submit(lambda: {self.visit(stmt)}),\n"
+        self.indentation -= 1
+        code += f"{self.indent()}]"
+        return code
+
+    def visit_Gather(self, node: Gather):
+        return f"[f.result() if hasattr(f, 'result') else f for f in {self.visit(node.tasks)}]"
+
+    def visit_Lock(self, node: Lock):
+        # We need to initialize the lock if it doesn't exist
+        lock_name = f"_lock_{node.name}"
+        code = f"if '{lock_name}' not in globals(): globals()['{lock_name}'] = threading.Lock()\n"
+        code += f"{self.indent()}with globals()['{lock_name}']:\n"
+        self.indentation += 1
+        code += self.compile_block(node.body)
+        self.indentation -= 1
+        return code
+
+    def visit_Channel(self, node: Channel):
+        return "queue.Queue()"
+
+    def visit_Send(self, node: Send):
+        return f"{self.visit(node.channel)}.put({self.visit(node.value)})"
+
+    def visit_Receive(self, node: Receive):
+        return f"{self.visit(node.channel)}.get()"
+
+    # --- Epic 5: ORM (Oracle) ---
+    def visit_ModelDef(self, node: ModelDef):
+        # Transpiled to a simple dict representation for the runtime to use
+        fields = {name: ftype for name, ftype in node.fields}
+        return f"builtins_map['models']['{node.name}'] = {repr(fields)}"
+
+    def visit_CreateTable(self, node: CreateTable):
+        return f"slang_db_create_table('{node.model_name}')"
+
+    def visit_InsertRecord(self, node: InsertRecord):
+        values = {k: self.visit(v) for k, v in node.values}
+        val_str = "{" + ", ".join([f"'{k}': {v}" for k, v in values.items()]) + "}"
+        return f"slang_db_insert('{node.model_name}', {val_str})"
+
+    def visit_FindRecords(self, node: FindRecords):
+        conds = []
+        for f, op, v in node.conditions:
+            conds.append(f"('{f}', '{op}', {self.visit(v)})")
+        conds_str = "[" + ", ".join(conds) + "]"
+        return f"slang_db_find('{node.model_name}', {conds_str}, {node.find_all})"
+
+    def visit_UpdateRecords(self, node: UpdateRecords):
+        conds = []
+        for f, op, v in node.conditions:
+            conds.append(f"('{f}', '{op}', {self.visit(v)})")
+        upds = []
+        for f, v in node.updates:
+            upds.append(f"('{f}', {self.visit(v)})")
+        
+        conds_str = "[" + ", ".join(conds) + "]"
+        upds_str = "[" + ", ".join(upds) + "]"
+        return f"slang_db_update('{node.model_name}', {conds_str}, {upds_str})"
+
+    def visit_DeleteRecords(self, node: DeleteRecords):
+        conds = []
+        for f, op, v in node.conditions:
+            conds.append(f"('{f}', '{op}', {self.visit(v)})")
+        conds_str = "[" + ", ".join(conds) + "]"
+        return f"slang_db_delete('{node.model_name}', {conds_str})"
+
     def visit_Listen(self, node: Listen):
         """
         -----Purpose: Compiles the HTTP server start command.

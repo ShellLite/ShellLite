@@ -15,7 +15,7 @@ pip install shell-lite
 ```
 
 ### Windows Installer
-Download the latest `shl.exe` from the [Releases page](https://github.com/Shrey-N/ShellLite/releases).
+Download the latest `shl.exe` from the [Releases page](https://github.com/ShellLite/ShellLite/releases).
 
 1.  **Download & Run**: Locate the compiled `shl.exe` file and run it.
 2.  **Global Installation**: The first time you run it, if it detects it isn't installed globally (system-wide), it will ask:
@@ -31,7 +31,7 @@ If you are developing the language itself or prefer running from source:
 
 1.  **Clone the Repository**:
     ```bash
-    git clone https://github.com/Shrey-N/ShellLite.git
+    git clone https://github.com/ShellLite/ShellLite.git
     cd ShellLite
     ```
 2.  **Install in Development Mode**:
@@ -62,7 +62,7 @@ The extension provides syntax highlighting and code snippets for ShellLite.
 
 ### ShellDesk IDE
 The official IDE for ShellLite with integrated debugging and project management:
-- [ShellDesk on GitHub](https://github.com/Shrey-N/ShellDesk)
+- [ShellDesk on GitHub](https://github.com/ShellLite/ShellLite)
 
 ## 3. CLI Commands
 

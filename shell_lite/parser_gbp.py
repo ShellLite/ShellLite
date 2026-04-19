@@ -215,6 +215,20 @@ class GeometricBindingParser:
             'TEST': self.bind_test,
             'EXPECT': self.bind_assert,
             'ENSURE': self.bind_assert,
+            # Epic 3: Concurrency
+            'PARALLEL': self.bind_parallel,
+            'GATHER': self.bind_expression_statement,
+            'LOCK': self.bind_lock,
+            'CHANNEL': self.bind_expression_statement,
+            'SEND': self.bind_send,
+            'RECEIVE': self.bind_expression_statement,
+            # Epic 5: ORM
+            'MODEL': self.bind_model,
+            'CREATE': self.bind_create_table,
+            'INSERT': self.bind_insert_record,
+            'FIND': self.bind_find_records,
+            'UPDATE': self.bind_update_records,
+            'DELETE': self.bind_delete_records,
         }
         
         
@@ -227,7 +241,7 @@ class GeometricBindingParser:
                 ast_node = self.bind_middleware(node)
                 return self._set_node_loc(ast_node, node)
                 
-        if head_type == 'ID':
+        if head_type in ('ID', 'COUNT', 'MAX', 'MIN', 'LERP', 'CLAMPED'):
             val = node.head_token.value.lower()
             if val == 'a' and len(node.tokens) > 1:
                 t1 = node.tokens[1].type
@@ -263,7 +277,7 @@ class GeometricBindingParser:
         """
         -----Purpose: Binds a GeoNode to an expression node (e.g. function call).
         """
-        return self.parse_expr_iterative(node.tokens)
+        return self.parse_expr_iterative(node.tokens, node.children)
     def peek_type(self, node: GeoNode, offset: int) -> str:
         if offset < len(node.tokens):
             return node.tokens[offset].type
@@ -482,7 +496,7 @@ class GeometricBindingParser:
             type_hint = tokens[2].value.lower()
             
         expr_tokens = tokens[assign_idx + 1:]
-        value = self.parse_expr_iterative(expr_tokens)
+        value = self.parse_expr_iterative(expr_tokens, node.children)
         if type_hint:
             return TypedAssign(name, type_hint, value)
         return Assign(name, value)
@@ -897,6 +911,194 @@ class GeometricBindingParser:
         right = self.parse_expr_iterative(right_tokens) if right_tokens else None
         
         return Assertion(left, op_str, right)
+    def bind_parallel(self, node: GeoNode) -> Parallel:
+        """
+        -----Purpose: Binds a PARALLEL block GeoNode to an AST Parallel node.
+        """
+        body = self.bind_statement_list(node.children)
+        return Parallel(body)
+
+    def bind_lock(self, node: GeoNode) -> Lock:
+        """
+        -----Purpose: Binds a LOCK block GeoNode to an AST Lock node.
+        """
+        name = "default"
+        if len(node.tokens) > 1:
+            name_val = self.parse_expr_iterative(node.tokens[1:])
+            if hasattr(name_val, 'value'):
+                name = str(name_val.value)
+        body = self.bind_statement_list(node.children)
+        return Lock(name, body)
+
+    def bind_send(self, node: GeoNode) -> Send:
+        """
+        -----Purpose: Binds a SEND block GeoNode to an AST Send node.
+        """
+        tokens = node.tokens[1:]
+        if len(tokens) < 2:
+            raise SyntaxError("send requires a channel and a value")
+        channel = self.parse_expr_iterative([tokens[0]])
+        value = self.parse_expr_iterative(tokens[1:])
+        return Send(channel, value)
+    def bind_model(self, node: GeoNode) -> ModelDef:
+        """
+        -----Purpose: Binds a MODEL block GeoNode to an AST ModelDef node.
+        """
+        name = node.tokens[1].value if len(node.tokens) > 1 else "UnnamedModel"
+        fields = []
+        for child in node.children:
+            child_tokens = child.tokens
+            if child_tokens and child_tokens[0].type == 'HAS':
+                field_name = child_tokens[1].value if len(child_tokens) > 1 else "unnamed"
+                field_type = "str"
+                for i, t in enumerate(child_tokens):
+                    if t.type == 'AS' and i + 1 < len(child_tokens):
+                        field_type = child_tokens[i + 1].value.lower()
+                fields.append((field_name, field_type))
+        return ModelDef(name, fields)
+
+    def bind_create_table(self, node: GeoNode) -> CreateTable:
+        """
+        -----Purpose: Binds 'create table ModelName' to an AST CreateTable node.
+        """
+        tokens = node.tokens
+        model_name = "Unknown"
+        for i, t in enumerate(tokens):
+            if t.type == 'TABLE' and i + 1 < len(tokens):
+                model_name = tokens[i + 1].value
+        return CreateTable(model_name)
+
+    def bind_insert_record(self, node: GeoNode) -> InsertRecord:
+        """
+        -----Purpose: Binds 'insert ModelName field1 val1 field2 val2...'
+        """
+        tokens = node.tokens
+        model_name = tokens[1].value if len(tokens) > 1 else "Unknown"
+        values = []
+        i = 2
+        while i < len(tokens) - 1:
+            field_name = tokens[i].value
+            value = self.parse_expr_iterative([tokens[i + 1]])
+            values.append((field_name, value))
+            i += 2
+        return InsertRecord(model_name, values)
+
+    def _parse_orm_conditions(self, tokens) -> list:
+        """
+        -----Purpose: Parses WHERE conditions from tokens.
+        -----  Supports: field is value, field more than value,
+        -----           field less than value, field contains value
+        """
+        conditions = []
+        i = 0
+        while i < len(tokens):
+            if i + 2 < len(tokens):
+                field = tokens[i].value
+                # "more than" or "greater than"
+                if tokens[i + 1].type in ('GREATER',) or tokens[i + 1].value == 'more':
+                    if i + 3 < len(tokens) and tokens[i + 2].type == 'THAN':
+                        value = self.parse_expr_iterative([tokens[i + 3]])
+                        conditions.append((field, ">", value))
+                        i += 4
+                        continue
+                # "less than"
+                elif tokens[i + 1].type in ('LESS',):
+                    if i + 3 < len(tokens) and tokens[i + 2].type == 'THAN':
+                        value = self.parse_expr_iterative([tokens[i + 3]])
+                        conditions.append((field, "<", value))
+                        i += 4
+                        continue
+                # "is" / "equals"
+                elif tokens[i + 1].type in ('IS', 'EQUAL'):
+                    value = self.parse_expr_iterative([tokens[i + 2]])
+                    conditions.append((field, "=", value))
+                    i += 3
+                    continue
+                # "contains"
+                elif tokens[i + 1].type == 'CONTAINS':
+                    value = self.parse_expr_iterative([tokens[i + 2]])
+                    conditions.append((field, "LIKE", value))
+                    i += 3
+                    continue
+            i += 1
+        return conditions
+
+    def bind_find_records(self, node: GeoNode) -> FindRecords:
+        """
+        -----Purpose: Binds 'find [all|count of] ModelName [where ...]'
+        """
+        tokens = node.tokens[1:]  # skip 'find'
+        find_all = True
+        is_count = False
+        i = 0
+        # Check for 'all' or 'count of' keywords
+        if i < len(tokens):
+            if tokens[i].value == 'all':
+                find_all = True
+                i += 1
+            elif tokens[i].type == 'COUNT':
+                is_count = True
+                i += 1
+                if i < len(tokens) and tokens[i].type == 'OF':
+                    i += 1
+        
+        model_name = tokens[i].value if i < len(tokens) else "Unknown"
+        i += 1
+        conditions = []
+        # Check for WHERE
+        if i < len(tokens) and tokens[i].type == 'WHERE':
+            i += 1
+            conditions = self._parse_orm_conditions(tokens[i:])
+        return FindRecords(model_name, conditions, find_all, is_count)
+
+    def bind_update_records(self, node: GeoNode) -> UpdateRecords:
+        """
+        -----Purpose: Binds 'update ModelName where ... set field value'
+        """
+        tokens = node.tokens[1:]
+        model_name = tokens[0].value if tokens else "Unknown"
+        conditions = []
+        updates = []
+        # Split on 'where' and 'set'
+        where_idx = -1
+        set_idx = -1
+        for i, t in enumerate(tokens):
+            if t.type == 'WHERE':
+                where_idx = i
+            if t.type == 'SET':
+                set_idx = i
+        if where_idx != -1 and set_idx != -1:
+            conditions = self._parse_orm_conditions(tokens[where_idx + 1:set_idx])
+            upd_tokens = tokens[set_idx + 1:]
+            j = 0
+            while j < len(upd_tokens) - 1:
+                field_name = upd_tokens[j].value
+                value = self.parse_expr_iterative([upd_tokens[j + 1]])
+                updates.append((field_name, value))
+                j += 2
+        elif set_idx != -1:
+            upd_tokens = tokens[set_idx + 1:]
+            j = 0
+            while j < len(upd_tokens) - 1:
+                field_name = upd_tokens[j].value
+                value = self.parse_expr_iterative([upd_tokens[j + 1]])
+                updates.append((field_name, value))
+                j += 2
+        return UpdateRecords(model_name, conditions, updates)
+
+    def bind_delete_records(self, node: GeoNode) -> DeleteRecords:
+        """
+        -----Purpose: Binds 'delete ModelName where ...' to an AST DeleteRecords node.
+        """
+        tokens = node.tokens[1:]
+        model_name = tokens[0].value if tokens else "Unknown"
+        conditions = []
+        for i, t in enumerate(tokens):
+            if t.type == 'WHERE':
+                conditions = self._parse_orm_conditions(tokens[i + 1:])
+                break
+        return DeleteRecords(model_name, conditions)
+
     def bind_natural_set(self, node: GeoNode) -> Call:
         """
         -----Purpose: Binds a natural language set ('a unique set of...') GeoNode.
@@ -1028,17 +1230,26 @@ class GeometricBindingParser:
         if tokens[-1].type == 'COLON':
             end -= 1
         return tokens[start:end]
-    def parse_expr_iterative(self, tokens: List[Token]) -> Optional[Node]:
+    def parse_expr_iterative(self, tokens: List[Token], children: List[GeoNode] = None) -> Node:
         """
-        -----Purpose: Shunting-yard variant to produce an AST directly from a 
-                      flat list of tokens.
+        -----Purpose: A non-recursive (iterative) expression parser using an 
+        -----        operator-precedence (Pratt) style stack approach.
         """
         if not tokens:
             return None
-        values: List[Node] = []
-        ops: List[str] = []
-
-
+        
+        values = []
+        ops = []
+        
+        # Precedence table
+        precedence = {
+            'PLUS': 10, 'MINUS': 10,
+            'STAR': 20, 'SLASH': 20, 'MOD': 20,
+            'GREATER': 5, 'LESS': 5, 'EQUAL': 4,
+            'AND': 2, 'OR': 1,
+            'MATCHES': 5, 'IS': 4, 'BE': 4, 'CONTAINS': 5
+        }
+        
         def apply_op():
             """Applies the top operator to the top two values."""
             if not ops:
@@ -1227,7 +1438,7 @@ class GeometricBindingParser:
                     elements_tokens.append(current_elem)
                 
                 items = [
-                    self.parse_expr_iterative(elem)
+                    self.parse_expr_iterative(elem, [])
                     for elem in elements_tokens if elem
                 ]
                 values.append(Call('set', [ListVal(items)]))
@@ -1238,9 +1449,129 @@ class GeometricBindingParser:
                 values.append(Call('ask', [String(tokens[i + 1].value)]))
                 i += 2
                 continue
+            elif t.type == 'GATHER':
+                # GATHER <expr>
+                i += 1
+                # Find the extent of the expr (until next low precedence or end)
+                # For simplicity in this grammar, we'll assume it's the rest of the tokens
+                # or until a comma if in a list.
+                inner_tokens = tokens[i:]
+                expr_node = self.parse_expr_iterative(inner_tokens)
+                values.append(Gather(expr_node))
+                break # Consumed the rest
+            elif t.type == 'RECEIVE':
+                i += 1
+                inner_tokens = tokens[i:]
+                expr_node = self.parse_expr_iterative(inner_tokens)
+                values.append(Receive(expr_node))
+                break
+            elif t.type == 'CHANNEL':
+                values.append(Channel())
+                i += 1
+                continue
+            elif t.type in ('MAX', 'MIN'):
+                node_class = MaxNode if t.type == 'MAX' else MinNode
+                i += 1
+                if i < len(tokens) and tokens[i].type == 'OF':
+                    i += 1
+                
+                # We need to see if there's an 'and' to separate two expressions
+                # e.g. "maximum of a and b"
+                # Search for 'AND' at current depth
+                and_idx = -1
+                depth = 0
+                for k in range(i, len(tokens)):
+                    tt = tokens[k].type
+                    if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
+                    elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
+                    elif tt == 'AND' and depth == 0:
+                        and_idx = k
+                        break
+                
+                if and_idx != -1:
+                    left_tokens = tokens[i:and_idx]
+                    right_tokens = tokens[and_idx+1:]
+                    left_expr = self.parse_expr_iterative(left_tokens)
+                    right_expr = self.parse_expr_iterative(right_tokens)
+                    values.append(node_class(left_expr, right_expr))
+                    break # Consumed everything
+                else:
+                    inner_tokens = tokens[i:]
+                    expr_node = self.parse_expr_iterative(inner_tokens)
+                    values.append(node_class(expr_node, None))
+                    break
+            elif t.type == 'CLAMPED':
+                i += 1
+                bet_idx = -1
+                and_idx = -1
+                depth = 0
+                for k in range(i, len(tokens)):
+                    tt = tokens[k].type
+                    if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
+                    elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
+                    elif depth == 0:
+                        if tt == 'BETWEEN': bet_idx = k
+                        elif tt == 'AND' and bet_idx != -1:
+                            and_idx = k
+                            break
+                if bet_idx != -1 and and_idx != -1:
+                    val_expr = self.parse_expr_iterative(tokens[i:bet_idx])
+                    min_expr = self.parse_expr_iterative(tokens[bet_idx+1:and_idx])
+                    max_expr = self.parse_expr_iterative(tokens[and_idx+1:])
+                    values.append(ClampNode(val_expr, min_expr, max_expr))
+                    break
+                else:
+                    raise SyntaxError(f"Malformed 'clamped' expression at line {t.line}")
+            elif t.type == 'LERP':
+                i += 1
+                from_idx = -1
+                to_idx = -1
+                by_idx = -1
+                depth = 0
+                for k in range(i, len(tokens)):
+                    tt = tokens[k].type
+                    if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
+                    elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
+                    elif depth == 0:
+                        if tt == 'FROM': from_idx = k
+                        elif tt == 'TO': to_idx = k
+                        elif tt == 'BY': by_idx = k
+                if from_idx != -1 and to_idx != -1 and by_idx != -1:
+                    a_expr = self.parse_expr_iterative(tokens[from_idx+1:to_idx])
+                    b_expr = self.parse_expr_iterative(tokens[to_idx+1:by_idx])
+                    t_expr = self.parse_expr_iterative(tokens[by_idx+1:])
+                    values.append(LerpNode(a_expr, b_expr, t_expr))
+                    break
+                else:
+                    to_idx = -1
+                    by_idx = -1
+                    for k in range(i, len(tokens)):
+                        tt = tokens[k].type
+                        if tt == 'TO': to_idx = k
+                        elif tt == 'BY': by_idx = k
+                    if to_idx != -1 and by_idx != -1:
+                        a_expr = self.parse_expr_iterative(tokens[i:to_idx])
+                        b_expr = self.parse_expr_iterative(tokens[to_idx+1:by_idx])
+                        t_expr = self.parse_expr_iterative(tokens[by_idx+1:])
+                        values.append(LerpNode(a_expr, b_expr, t_expr))
+                        break
+                    raise SyntaxError(f"Malformed 'lerp' expression at line {t.line}")
+            elif t.type == 'FIND':
+                tmp_node = GeoNode(head_token=t, line=t.line, indent_level=0, tokens=tokens[i:], children=[])
+                res = self.bind_find_records(tmp_node)
+                values.append(res)
+                break
+            elif t.type == 'PARALLEL':
+                if children:
+                    body = self.bind_statement_list(children)
+                    values.append(Parallel(body))
+                else:
+                    values.append(Parallel([]))
+                i += 1
+                continue
             elif t.type in (
-                'ID', 'ADD', 'REMOVE', 'SAY', 'PRINT', 'ASK',
-                'CONVERT', 'WAIT', 'LOAD', 'SAVE',
+                'ID', 'ADD', 'REMOVE', 
+                'CONVERT', 'LOAD', 'SAVE',
                 'SET', 'LIST', 'SIZE', 'INT', 'STR', 'LEN', 'KEYS',
                 'UPPER', 'LOWER', 'SORT',
                 'CONTAINS', 'EMPTY', 'JSON', 'HTTP',
@@ -1273,7 +1604,7 @@ class GeometricBindingParser:
                                 current_elem.append(tokens[j])
                             j += 1
                         args = [
-                            self.parse_expr_iterative(elem)
+                            self.parse_expr_iterative(elem, [])
                             for elem in elements_tokens if elem
                         ]
                         values.append(Call(name, args))

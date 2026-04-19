@@ -366,8 +366,8 @@ Style: `bold`
 **ShellLite v0.05.0 (Performance Update)**
 
 For more information:
-- [GitHub Repository](https://github.com/Shrey-N/ShellLite)
+- [GitHub Repository](https://github.com/ShellLite/ShellLite)
 - [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=ShellLite.shelllite-hello)
-- [ShellDesk IDE](https://github.com/Shrey-N/ShellDesk)
+- [ShellDesk IDE](https://github.com/ShellLite/ShellLite)
 
 Made by Shrey Naithani

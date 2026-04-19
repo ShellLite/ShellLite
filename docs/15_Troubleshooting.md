@@ -538,7 +538,7 @@ This shows full stack traces for errors.
 If you're still stuck:
 
 1. **Check the documentation:** Review relevant chapters in `docs/`
-2. **Search issues:** [GitHub Issues](https://github.com/Shrey-N/ShellLite/issues)
+2. **Search issues:** [GitHub Issues](https://github.com/ShellLite/ShellLite/issues)
 3. **Ask for help:** Create a new issue with:
    - ShellLite version (`shl --version`)
    - Operating system
