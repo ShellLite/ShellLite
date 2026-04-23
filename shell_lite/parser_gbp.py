@@ -229,6 +229,7 @@ class GeometricBindingParser:
             'FIND': self.bind_find_records,
             'UPDATE': self.bind_update_records,
             'DELETE': self.bind_delete_records,
+            'START': self.bind_start,
         }
         
         
@@ -241,7 +242,10 @@ class GeometricBindingParser:
                 ast_node = self.bind_middleware(node)
                 return self._set_node_loc(ast_node, node)
                 
-        if head_type in ('ID', 'COUNT', 'MAX', 'MIN', 'LERP', 'CLAMPED'):
+        if head_type in (
+            'ID', 'COUNT', 'MAX', 'MIN', 'LERP', 'CLAMPED',
+            'BUTTON', 'HEADING', 'PARAGRAPH', 'IMAGE', 'START', 'SERVER'
+        ):
             val = node.head_token.value.lower()
             if val == 'a' and len(node.tokens) > 1:
                 t1 = node.tokens[1].type
@@ -1172,7 +1176,9 @@ class GeometricBindingParser:
         -----Purpose: Binds a GeoNode to either a function Call or an expression.
         """
         tokens = node.tokens
-        if len(tokens) >= 1 and tokens[0].type == 'ID':
+        if len(tokens) >= 1 and tokens[0].type in (
+            'ID', 'BUTTON', 'HEADING', 'PARAGRAPH', 'IMAGE', 'START', 'SERVER'
+        ):
             name = tokens[0].value
             args = []
             kwargs = []
@@ -1627,5 +1633,6 @@ class GeometricBindingParser:
         while ops:
             apply_op()
         if len(values) > 1:
+            print(f"DEBUG: Too many operands for tokens: {tokens}")
             raise SyntaxError("Invalid expression: too many operands")
         return values[0] if values else None
