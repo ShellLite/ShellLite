@@ -4,7 +4,7 @@
 
 **An english Like Programming Language**
 
-ShellLite is a modern programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable. With version 0.05.0, ShellLite now supports native compilation via LLVM alongside its interpreted mode.
+ShellLite is a programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable. With version 0.6.0, ShellLite now supports native compilation via LLVM alongside its interpreted mode.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3--with--classpath--exception-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Version](https://img.shields.io/badge/version-0.6-green.svg)]()
@@ -268,7 +268,7 @@ shl compile script.shl --target python
 
 ## The Three Pillars
 
-ShellLite v0.05.0 introduces three major features:
+ShellLite v0.6.0 introduces three major features:
 
 ```mermaid
 graph TB

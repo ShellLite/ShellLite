@@ -364,6 +364,8 @@ class Interpreter:
                 'get': lambda k, d=None: os.environ.get(k, d),
                 'set': lambda k, v: os.environ.__setitem__(k, str(v)),
                 'all': lambda: dict(os.environ),
+                'os': os.name,
+                'platform': sys.platform,
             }),
             'path': Namespace('path', {
                 'join': os.path.join,

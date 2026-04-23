@@ -4,11 +4,11 @@ authors:
 - family-names: "Naithani"
   given-names: "Shrey"
 title: "ShellLite"
-version: 0.5.3.5
+version: 0.6.0
 date-released: 2026-01-10
 url: "https://shelllite.tech"
 repository-code: "https://github.com/ShellLite/ShellLite"
-abstract: "An English-Like Programming Language for Accessible Automation and Education."
+abstract: "ShellLite is a programming language designed to be as readable as plain English. Code like you Think!"
 keywords:
   - python
   - interpreter
