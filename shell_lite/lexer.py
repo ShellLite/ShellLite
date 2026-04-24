@@ -217,7 +217,7 @@ class Lexer:
                 )
                 pos += 7
                 continue
-            noise_words = ('the', 'a', 'an', 'let', 'please')
+            noise_words = ('the', 'let', 'please')
             found_noise = False
             for word in noise_words:
                 if rest_of_line.startswith(word):

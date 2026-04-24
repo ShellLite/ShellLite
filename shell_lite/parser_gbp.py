@@ -265,11 +265,22 @@ class GeometricBindingParser:
                     break
             
             if assign_idx != -1:
-                if len(node.tokens) > 1 and node.tokens[1].type == 'LBRACKET':
-                    ast_node = self.bind_index_assignment(node, assign_idx)
-                else:
-                    ast_node = self.bind_assignment(node)
-                return self._set_node_loc(ast_node, node)
+                is_real_assignment = False
+                if assign_idx == 1:
+                    is_real_assignment = True
+                elif assign_idx == 2 and node.head_token.type == 'MAKE':
+                    is_real_assignment = True
+                elif assign_idx == 3 and len(node.tokens) > 1 and node.tokens[1].type == 'AS':
+                    is_real_assignment = True
+                elif len(node.tokens) > 1 and node.tokens[1].type == 'LBRACKET':
+                    is_real_assignment = True
+                
+                if is_real_assignment:
+                    if len(node.tokens) > 1 and node.tokens[1].type == 'LBRACKET':
+                        ast_node = self.bind_index_assignment(node, assign_idx)
+                    else:
+                        ast_node = self.bind_assignment(node)
+                    return self._set_node_loc(ast_node, node)
             
             ast_node = self.bind_call_or_expr(node)
             return self._set_node_loc(ast_node, node)
@@ -426,9 +437,6 @@ class GeometricBindingParser:
                     return Repeat(count, body)
             return None
         body = self.bind_statement_list(node.children)
-        # Check for range(...) special case FIRST, before
-        # generic parse_expr_iterative which can't handle
-        # the RANGE keyword token.
         if node.tokens[in_idx + 1].type == 'RANGE':
             args_tokens = self._extract_expr_tokens(node.tokens, in_idx+2)
             filtered = [
@@ -459,11 +467,6 @@ class GeometricBindingParser:
         return ForIn(var_name, iterable, body)
     def bind_print(self, node: GeoNode) -> Print:
         """
-        -----Purpose: Binds a PRINT GeoNode to an AST Print node.
-        """
-        ...
-
-        """
         -----Purpose: Binds a PRINT block GeoNode to an AST Print node.
         """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
@@ -474,6 +477,9 @@ class GeometricBindingParser:
         -----Purpose: Binds a RETURN block GeoNode to an AST Return node.
         """
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
+        if node.children:
+            for child in node.children:
+                expr_tokens.extend(child.tokens)
         expr = self.parse_expr_iterative(expr_tokens)
         return Return(expr)
     def bind_assignment(self, node: GeoNode) -> Assign:
@@ -500,6 +506,9 @@ class GeometricBindingParser:
             type_hint = tokens[2].value.lower()
             
         expr_tokens = tokens[assign_idx + 1:]
+        if node.children:
+            for child in node.children:
+                expr_tokens.extend(child.tokens)
         value = self.parse_expr_iterative(expr_tokens, node.children)
         if type_hint:
             return TypedAssign(name, type_hint, value)
@@ -507,7 +516,7 @@ class GeometricBindingParser:
         
     def bind_index_assignment(self, node: GeoNode, assign_idx: int) -> Any:
         """
-        -----Purpose: Binds an array/dict assignment (e.g. board[x] = y)
+        -----Purpose: Binds an array/dict assignment
         """
         lhs_tokens = node.tokens[:assign_idx]
         value_tokens = node.tokens[assign_idx + 1:]
@@ -1247,13 +1256,14 @@ class GeometricBindingParser:
         values = []
         ops = []
         
-        # Precedence table
-        precedence = {
+        # Local precedence for shunting-yard (fallback if not in self.precedence)
+        local_precedence = {
             'PLUS': 10, 'MINUS': 10,
             'STAR': 20, 'SLASH': 20, 'MOD': 20,
             'GREATER': 5, 'LESS': 5, 'EQUAL': 4,
             'AND': 2, 'OR': 1,
-            'MATCHES': 5, 'IS': 4, 'BE': 4, 'CONTAINS': 5
+            'MATCHES': 5, 'IS': 4, 'BE': 4, 'CONTAINS': 5,
+            'DOT': 30
         }
         
         def apply_op():
@@ -1268,17 +1278,21 @@ class GeometricBindingParser:
                     'PLUS': '+', 'MINUS': '-', 'MUL': '*', 'DIV': '/', 
                     'MOD': '%', 'LT': '<', 'GT': '>', 'LE': '<=', 
                     'GE': '>=', 'EQ': '==', 'NEQ': '!=', 'AND': 'and', 
-                    'OR': 'or', 'IS': '==', 'IN': 'in', 'NOTIN': 'not in'
+                    'OR': 'or', 'IS': '==', 'IN': 'in', 'NOTIN': 'not in',
+                    'DOT': '.'
                 }
                 op_str = op_map.get(op_type, op_type)
                 values.append(BinOp(left, op_str, right))
             else:
+                print(f"DEBUG: missing operands for {op_type}, values={values}, ops={ops}")
                 raise SyntaxError(
                     f"Invalid expression: missing operands for {op_type}"
                 )
 
-        def precedence(op_type):
+        def get_precedence(op_type):
             """Returns operator precedence level."""
+            if op_type in local_precedence:
+                return local_precedence[op_type]
             return self.precedence.get(op_type, 0)
 
         i = 0
@@ -1327,6 +1341,8 @@ class GeometricBindingParser:
                 j = i + 1
                 elements_tokens = []
                 current_elem = []
+                has_comma = False
+                to_idx = -1
                 while j < len(tokens):
                     if tokens[j].type == 'LBRACKET':
                         depth += 1
@@ -1339,9 +1355,23 @@ class GeometricBindingParser:
                     if tokens[j].type == 'COMMA' and depth == 1:
                         elements_tokens.append(current_elem)
                         current_elem = []
+                        has_comma = True
                     else:
+                        if tokens[j].type == 'TO' and depth == 1:
+                            to_idx = len(current_elem)
                         current_elem.append(tokens[j])
                     j += 1
+                
+                if not has_comma and to_idx != -1 and len(elements_tokens) == 1:
+                    elem = elements_tokens[0]
+                    start_expr = self.parse_expr_iterative(elem[:to_idx], children)
+                    end_expr = self.parse_expr_iterative(elem[to_idx+1:], children)
+                    node = Call('list', [Call('range', [start_expr, end_expr])])
+                    node.line = t.line
+                    node.col = t.column
+                    values.append(node)
+                    i = j + 1
+                    continue
                 items = [
                     self.parse_expr_iterative(elem) 
                     for elem in elements_tokens if elem
@@ -1361,13 +1391,6 @@ class GeometricBindingParser:
                     values.append(node_list)
                 i = j + 1
                 continue
-            elif t.type == 'ID':
-                val = VarAccess(t.value)
-                val.line = t.line
-                val.col = t.column
-                val.end_line = t.line
-                val.end_col = t.column + len(t.value)
-                values.append(val)
             elif t.type == 'LBRACE':
                 depth = 1
                 j = i + 1
@@ -1456,15 +1479,11 @@ class GeometricBindingParser:
                 i += 2
                 continue
             elif t.type == 'GATHER':
-                # GATHER <expr>
                 i += 1
-                # Find the extent of the expr (until next low precedence or end)
-                # For simplicity in this grammar, we'll assume it's the rest of the tokens
-                # or until a comma if in a list.
                 inner_tokens = tokens[i:]
                 expr_node = self.parse_expr_iterative(inner_tokens)
                 values.append(Gather(expr_node))
-                break # Consumed the rest
+                break 
             elif t.type == 'RECEIVE':
                 i += 1
                 inner_tokens = tokens[i:]
@@ -1480,10 +1499,6 @@ class GeometricBindingParser:
                 i += 1
                 if i < len(tokens) and tokens[i].type == 'OF':
                     i += 1
-                
-                # We need to see if there's an 'and' to separate two expressions
-                # e.g. "maximum of a and b"
-                # Search for 'AND' at current depth
                 and_idx = -1
                 depth = 0
                 for k in range(i, len(tokens)):
@@ -1500,7 +1515,7 @@ class GeometricBindingParser:
                     left_expr = self.parse_expr_iterative(left_tokens)
                     right_expr = self.parse_expr_iterative(right_tokens)
                     values.append(node_class(left_expr, right_expr))
-                    break # Consumed everything
+                    break
                 else:
                     inner_tokens = tokens[i:]
                     expr_node = self.parse_expr_iterative(inner_tokens)
@@ -1573,14 +1588,72 @@ class GeometricBindingParser:
                     values.append(Parallel(body))
                 else:
                     values.append(Parallel([]))
+                break
+            elif t.type == 'ID' and t.value.lower() == 'sum' and i + 1 < len(tokens) and tokens[i+1].type == 'OF':
+                i += 2
+                inner_expr = self.parse_expr_iterative(tokens[i:], children)
+                values.append(Call('sum', [inner_expr]))
+                break
+            elif t.type == 'ID' and i + 1 < len(tokens) and tokens[i+1].type == 'FROM':
+                var_name = t.value
+                from_idx = i + 1
+                to_idx = -1
+                when_idx = -1
+                for k in range(from_idx, len(tokens)):
+                    if tokens[k].type == 'TO': to_idx = k
+                    elif tokens[k].type in ('WHEN', 'THAT') or (tokens[k].type == 'ID' and tokens[k].value.lower() == 'that'): 
+                        when_idx = k
+                        break
+                
+                if to_idx != -1:
+                    start_expr = self.parse_expr_iterative(tokens[from_idx+1:to_idx], children)
+                    end_expr_tokens = tokens[to_idx+1:when_idx] if when_idx != -1 else tokens[to_idx+1:]
+                    end_expr = self.parse_expr_iterative(end_expr_tokens, children)
+                    iterable = Call('range', [start_expr, end_expr])
+                    
+                    condition = None
+                    if when_idx != -1:
+                        cond_start = when_idx + 1
+                        if cond_start < len(tokens) and tokens[cond_start].type == 'ID' and tokens[cond_start].value.lower() == 'are':
+                            cond_start += 1
+                        condition = self.parse_expr_iterative(tokens[cond_start:], children)
+                    values.append(ListComprehension(VarAccess(var_name), var_name, iterable, condition))
+                    break
+            elif ((t.type == 'ID' and t.value.lower() == 'split') or t.type in ('UPPER', 'LOWER')) and (i + 1 >= len(tokens) or tokens[i+1].type != 'LPAREN'):
+                func_name = t.value.lower()
                 i += 1
-                continue
+                only_letters = False
+                only_idx = -1
+                for k in range(i, len(tokens)):
+                    if tokens[k].type == 'ID' and tokens[k].value.lower() == 'only' and k + 1 < len(tokens) and tokens[k+1].type == 'ID' and tokens[k+1].value.lower() == 'letters':
+                        only_idx = k
+                        only_letters = True
+                        break
+                        
+                expr_tokens = tokens[i:only_idx] if only_idx != -1 else tokens[i:]
+                expr = self.parse_expr_iterative(expr_tokens, children)
+                
+                args = [expr]
+                kwargs = []
+                if only_letters:
+                    kwargs.append(('only', String('letters')))
+                    
+                values.append(Call(func_name, args, kwargs=kwargs))
+                break
+            elif t.type == 'READ' and (i + 1 >= len(tokens) or tokens[i+1].type != 'LPAREN'):
+                i += 1
+                expr = self.parse_expr_iterative(tokens[i:], children)
+                values.append(FileRead(expr))
+                break
             elif t.type in (
                 'ID', 'ADD', 'REMOVE', 
                 'CONVERT', 'LOAD', 'SAVE',
                 'SET', 'LIST', 'SIZE', 'INT', 'STR', 'LEN', 'KEYS',
                 'UPPER', 'LOWER', 'SORT',
                 'CONTAINS', 'EMPTY', 'JSON', 'HTTP',
+                'BUTTON', 'HEADING', 'PARAGRAPH', 'IMAGE', 'START', 'SERVER',
+                'READ', 'WRITE', 'OPEN', 'CLOSE', 'UPDATE', 'DELETE', 'FIND', 'CREATE', 'COUNT', 'INSERT',
+                'ERROR'
             ):
                 if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
                     name = t.value
@@ -1609,14 +1682,26 @@ class GeometricBindingParser:
                             else:
                                 current_elem.append(tokens[j])
                             j += 1
-                        args = [
-                            self.parse_expr_iterative(elem, [])
-                            for elem in elements_tokens if elem
-                        ]
-                        values.append(Call(name, args))
+                        args = []
+                        kwargs = []
+                        for elem in elements_tokens:
+                            if not elem: continue
+                            is_kw = (len(elem) >= 2 and elem[0].type == 'ID' and elem[1].type == 'ASSIGN')
+                            if is_kw:
+                                key = elem[0].value
+                                val = self.parse_expr_iterative(elem[2:], [])
+                                kwargs.append((key, val))
+                            else:
+                                args.append(self.parse_expr_iterative(elem, []))
+                        values.append(Call(name, args, kwargs=kwargs))
                         i = j
                 else:
-                    values.append(VarAccess(t.value))
+                    val = VarAccess(t.value)
+                    val.line = t.line
+                    val.col = t.column
+                    val.end_line = t.line
+                    val.end_col = t.column + len(t.value)
+                    values.append(val)
             elif t.type == 'LPAREN':
                 ops.append('LPAREN')
             elif t.type == 'RPAREN':
@@ -1626,13 +1711,12 @@ class GeometricBindingParser:
                     ops.pop()
             elif t.type in self.precedence:
                 while (ops and ops[-1] != 'LPAREN' and
-                       precedence(ops[-1]) >= precedence(t.type)):
+                       get_precedence(ops[-1]) >= get_precedence(t.type)):
                     apply_op()
                 ops.append(t.type)
             i += 1
         while ops:
             apply_op()
         if len(values) > 1:
-            print(f"DEBUG: Too many operands for tokens: {tokens}")
-            raise SyntaxError("Invalid expression: too many operands")
+            raise SyntaxError(f"Invalid expression: too many operands. Tokens: {tokens}, Values: {values}")
         return values[0] if values else None

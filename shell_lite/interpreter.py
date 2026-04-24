@@ -203,6 +203,9 @@ class Interpreter:
             'write': self.builtin_write,
             'json_parse': self.builtin_json_parse,
             'json_stringify': self.builtin_json_stringify,
+            'sum': sum,
+            'even': lambda x: x % 2 == 0,
+            'prime': lambda x: x > 1 and all(x % i != 0 for i in range(2, int(x**0.5) + 1)),
             'print': print,
             'add': self._builtin_smart_add,
             'ask': input,
@@ -331,8 +334,8 @@ class Interpreter:
     def _builtin_push(self, lst, item):
         lst.append(item)
         return None
-    def _builtin_upper(self, s):
-        return str(s).upper()
+    def _builtin_split(self, s, sep=None):
+        return str(s).split(sep)
     def _builtin_sum_range(self, start, end):
         return sum(range(int(start), int(end)))
     def _builtin_range_list(self, start, end):
@@ -453,6 +456,15 @@ class Interpreter:
             else:
                 result.append(self.visit(e))
         return result
+    def visit_FileRead(self, node: FileRead):
+        """
+        -----Purpose: Reads a file and returns its content as a string.
+        """
+        path = self.visit(node.path)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"File '{path}' not found.")
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
     def visit_Dictionary(self, node: Dictionary):
         """
         -----Purpose: Evaluates a dictionary literal.
@@ -549,7 +561,7 @@ class Interpreter:
         """
         -----Purpose: Evaluates a binary operation between two nodes.
         """
-        if node.op == 'DOT':
+        if node.op == '.':
             left = self.visit(node.left)
             if isinstance(node.right, VarAccess):
                 attr = node.right.name
@@ -575,39 +587,26 @@ class Interpreter:
                 if isinstance(left, list) and isinstance(right, list):
                     return left + right
                 return left + right
-            elif node.op == '-':
-                return left - right
-            elif node.op == '*':
-                return left * right
-            elif node.op == '/':
-                return left / right
-            elif node.op == '%':
-                return left % right
-            elif node.op == '==':
-                return left == right
-            elif node.op == '!=':
-                return left != right
-            elif node.op == '<':
-                return left < right
-            elif node.op == '>':
-                return left > right
-            elif node.op == 'in':
-                return left in right
-            elif node.op == 'not in':
-                return left not in right
-            elif node.op == '<=':
-                return left <= right
-            elif node.op == '>=':
-                return left >= right
-            elif node.op == 'and':
-                return left and right
-            elif node.op == 'or':
-                return left or right
+            elif node.op == '-': return left - right
+            elif node.op == '*': return left * right
+            elif node.op == '/': return left / right
+            elif node.op == '%': return left % right
+            elif node.op == '==': return left == right
+            elif node.op == '!=': return left != right
+            elif node.op == '<': return left < right
+            elif node.op == '>': return left > right
+            elif node.op == '<=': return left <= right
+            elif node.op == '>=': return left >= right
+            elif node.op == 'in': return left in right
+            elif node.op == 'not in': return left not in right
+            elif node.op == 'and': return left and right
+            elif node.op == 'or': return left or right
             elif node.op == 'matches':
                 return bool(re.search(str(right), str(left)))
+            else:
+                raise Exception(f"Unknown operator: {node.op}")
         except TypeError as e:
             raise e
-        raise Exception(f"Unknown operator: {node.op}")
     def visit_Print(self, node: Print):
         """
         -----Purpose: Evaluates and prints a expression with optional styling.
@@ -1166,10 +1165,16 @@ class Interpreter:
         try:
             for item in iterable:
                 new_env.set(node.var_name, item)
+                include = True
                 if node.condition:
-                    if not self.visit(node.condition):
-                        continue
-                result.append(self.visit(node.expr))
+                    cond_val = self.visit(node.condition)
+                    if callable(cond_val):
+                        include = bool(cond_val(item))
+                    else:
+                        include = bool(cond_val)
+                
+                if include:
+                    result.append(self.visit(node.expr))
         finally:
             self.current_env = old_env
         return result
@@ -2159,7 +2164,7 @@ class Interpreter:
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
         print("\n  ShellLite Server v0.6 is running!")
-        print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
+        print(f"  \u001b[1;36m->\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt:
             print("\n  Server stopped.")
@@ -2333,15 +2338,17 @@ class Interpreter:
                 return f.read()
         except FileNotFoundError:
              raise FileNotFoundError(f"File '{path}' not found.")
-    def _builtin_upper(self, s, only_letters=False):
+    def _builtin_upper(self, s, only=None):
         """
         -----Purpose: Builtin helper to convert string to uppercase.
         """
-        if not only_letters:
-            return s.upper()
-        if only_letters:
-             return re.sub(r'[^a-zA-Z\s]', '', s).upper()
-        return s.upper()
+        if isinstance(s, list):
+            return [self._builtin_upper(x, only=only) for x in s]
+        
+        s_str = str(s)
+        if only == 'letters':
+            return re.sub(r'[^a-zA-Z\s]', '', s_str).upper()
+        return s_str.upper()
 
     def _builtin_sum_range(self, start, end, condition=None):
         """
