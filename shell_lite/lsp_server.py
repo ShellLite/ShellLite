@@ -1,5 +1,5 @@
 """
-TODO:- Add proper Comments
+TODO:- Add proper Docstrings/Comments
 """
 import json
 import sys
