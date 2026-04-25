@@ -1,3 +1,6 @@
+"""
+TODO:- Add proper Comments
+"""
 import json
 import sys
 import os
@@ -112,7 +115,7 @@ class ShellLiteDocument:
         self._collect_symbols_and_semantic_checks()
 
     def _collect_symbols_and_semantic_checks(self):
-        defined_names = {} # name -> line
+        defined_names = {}
         
         def walk(nodes):
             for node in nodes:
@@ -174,8 +177,7 @@ class ShellLiteDocument:
                 indent_level = max(0, indent_level - 1)
             
             formatted_lines.append("    " * indent_level + stripped)
-            
-            # Indent after blocks
+
             if stripped.strip().endswith(":") or stripped.startswith(("if ", "while ", "for ", "to ", "thing ", "test ")):
                 if not stripped.startswith(("end", "give", "return", "stop", "skip")):
                     indent_level += 1
@@ -244,12 +246,12 @@ class LSPServer:
         req_id = msg.get("id")
         params = msg.get("params", {})
 
-        if not method and req_id is not None: return # Invalid
+        if not method and req_id is not None: return
 
         if method == "initialize":
             self._respond(req_id, {
                 "capabilities": {
-                    "textDocumentSync": 1, # Full
+                    "textDocumentSync": 1,
                     "hoverProvider": True,
                     "completionProvider": {"triggerCharacters": [" ", "."]},
                     "definitionProvider": True,
@@ -398,7 +400,7 @@ class LSPServer:
         
         for kw in _KEYWORDS:
             if kw not in seen:
-                items.append({"label": kw, "kind": 14}) # Keyword
+                items.append({"label": kw, "kind": 14})
                 
         self._respond(req_id, {"isIncomplete": False, "items": items})
 
