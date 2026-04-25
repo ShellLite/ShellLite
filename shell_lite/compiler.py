@@ -100,26 +100,26 @@ class Compiler:
             "        for prefix, folder in GLOBAL_STATIC_ROUTES.items():",
             "            if path.startswith(prefix):",
             "                clean_path = path[len(prefix):]",
-            "                if clean_path.startswith('/'): "
-            "clean_path = clean_path[1:]",
+            "                if clean_path.startswith('/'):",
+            "                    clean_path = clean_path[1:]",
             "                if clean_path == '': clean_path = 'index.html'",
             "                file_path = os.path.join(folder, clean_path)",
             "                if os.path.exists(file_path) and \\",
             "                   os.path.isfile(file_path):",
             "                     self.send_response(200)",
             "                     # Simple mime type guessing",
-            "                     if file_path.endswith('.css'): "
-            "settings = 'text/css'",
-            "                     elif file_path.endswith('.js'): "
-            "settings = 'application/javascript'",
-            "                     elif file_path.endswith('.html'): "
-            "settings = 'text/html'",
-            "                     else: "
-            "settings = 'application/octet-stream'",
+            "                     if file_path.endswith('.css'):",
+            "                         settings = 'text/css'",
+            "                     elif file_path.endswith('.js'):",
+            "                         settings = 'application/javascript'",
+            "                     elif file_path.endswith('.html'):",
+            "                         settings = 'text/html'",
+            "                     else:",
+            "                         settings = 'application/octet-stream'",
             "                     self.send_header('Content-type', settings)",
             "                     self.end_headers()",
-            "                     with open(file_path, 'rb') as f: "
-            "self.wfile.write(f.read())",
+            "                     with open(file_path, 'rb') as f:",
+            "                         self.wfile.write(f.read())",
             "                     return",
             "        handler = GLOBAL_ROUTES.get(path)",
             "        if handler:",
@@ -590,7 +590,6 @@ class Compiler:
         return f"[f.result() if hasattr(f, 'result') else f for f in {self.visit(node.tasks)}]"
 
     def visit_Lock(self, node: Lock):
-        # We need to initialize the lock if it doesn't exist
         lock_name = f"_lock_{node.name}"
         code = f"if '{lock_name}' not in globals(): globals()['{lock_name}'] = threading.Lock()\n"
         code += f"{self.indent()}with globals()['{lock_name}']:\n"

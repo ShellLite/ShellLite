@@ -2078,7 +2078,6 @@ class Interpreter:
             def do_GET(self):
                 self.handle_req()
             def do_POST(self):
-                print(f"DEBUG: Received POST request to {self.path}")
                 content_length = int(self.headers.get('Content-Length', 0))
                 content_type = self.headers.get('Content-Type', '')
                 post_data = self.rfile.read(content_length).decode('utf-8')
