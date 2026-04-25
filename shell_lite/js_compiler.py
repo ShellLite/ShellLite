@@ -3,15 +3,9 @@ from .ast_nodes import *
 
 class JSCompiler:
     def __init__(self):
-        """
-        -----Purpose: Initializes the JS compiler with zero indentation.
-        """
         self.indent_level = 0
 
     def compile(self, statements):
-        """
-        -----Purpose: Transpiles a list of AST nodes into a JS source string.
-        """
         code = ""
         for stmt in statements:
             code += self.visit(stmt) + "\n"
@@ -81,7 +75,7 @@ class JSCompiler:
         return f"{node.instance_name}.{node.property_name}"
     def visit_PropertyAssign(self, node):
         """
-        -----Purpose: Compiles a property assignment (e.g. obj.prop = val).
+        -----Purpose: Compiles a property assignment
         """
         val = self.visit(node.value)
         return f"{node.instance_name}.{node.property_name} = {val};"
@@ -97,8 +91,6 @@ class JSCompiler:
         return f"{{ {', '.join(items)} }}"
     def visit_Await(self, node):
         return f"await {self.visit(node.task)}"
-    
-    # --- Epic 3: Concurrency (JS Async/Await) ---
     def visit_Parallel(self, node: Parallel):
         body = "[\n"
         self.indent_level += 1
@@ -112,7 +104,6 @@ class JSCompiler:
         return f"await Promise.all({self.visit(node.tasks)})"
 
     def visit_Lock(self, node):
-        # JS is single-threaded, so 'lock' is just a normal block sequence.
         body = "{\n"
         self.indent_level += 1
         for stmt in node.body:
@@ -122,7 +113,7 @@ class JSCompiler:
         return body
 
     def visit_Channel(self, node):
-        return "[]" # Simple queue implementation
+        return "[]"
 
     def visit_Send(self, node):
         return f"{self.visit(node.channel)}.push({self.visit(node.value)})"
