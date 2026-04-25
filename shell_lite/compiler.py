@@ -1,28 +1,19 @@
 import random
 from typing import List
-
 from .ast_nodes import *
-
 
 class Compiler:
     """
     -----Purpose: Compiles the custom AST nodes down to executing Python source code.
     """
     def __init__(self):
-        """
-        -----Purpose: Initializes the compiler with zero indentation.
-        """
         self.indentation = 0
-
     def indent(self):
         """
         -----Purpose: Returns a string of spaces based on current indentation.
         """
         return "    " * self.indentation
     def visit(self, node: Node) -> str:
-        """
-        -----Purpose: Generic visitor dispatcher for AST nodes.
-        """
         method_name = f'visit_{type(node).__name__}'
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)

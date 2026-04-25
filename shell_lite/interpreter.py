@@ -571,11 +571,18 @@ class Interpreter:
             elif isinstance(node.right, Call):
                 func = None
                 attr = node.right.name
+                # Support 'trim' as an alias for 'strip' on strings
+                if isinstance(left, str) and attr == 'trim':
+                    attr = 'strip'
                 if hasattr(left, attr): func = getattr(left, attr)
                 elif hasattr(left, 'get'): func = left.get(attr)
                 if not func: raise AttributeError(f"Method '{attr}' not found")
                 args = [self.visit(a) for a in node.right.args]
-                return func(*args)
+                kwargs = {}
+                if getattr(node.right, 'kwargs', None):
+                    for k, v in node.right.kwargs:
+                        kwargs[k] = self.visit(v)
+                return func(*args, **kwargs)
             raise SyntaxError(f"Invalid member access: {node.right}")
 
         left = self.visit(node.left)
@@ -607,6 +614,16 @@ class Interpreter:
                 raise Exception(f"Unknown operator: {node.op}")
         except TypeError as e:
             raise e
+    def visit_UnaryOp(self, node: UnaryOp):
+        """
+        -----Purpose: Evaluates a unary operation
+        """
+        val = self.visit(node.right)
+        if node.op == 'not':
+            return not val
+        elif node.op == '-':
+            return -val
+        return val
     def visit_Print(self, node: Print):
         """
         -----Purpose: Evaluates and prints a expression with optional styling.
@@ -2061,6 +2078,7 @@ class Interpreter:
             def do_GET(self):
                 self.handle_req()
             def do_POST(self):
+                print(f"DEBUG: Received POST request to {self.path}")
                 content_length = int(self.headers.get('Content-Length', 0))
                 content_type = self.headers.get('Content-Type', '')
                 post_data = self.rfile.read(content_length).decode('utf-8')
@@ -2080,6 +2098,7 @@ class Interpreter:
                 self.handle_req()
             def handle_req(self, post_params=None, json_data=None):
                 try:
+                    interpreter_ref.current_env = interpreter_ref.global_env
                     if post_params is None: post_params = {}
                     path = self.path
                     if '?' in path: path = path.split('?')[0]
@@ -2156,8 +2175,11 @@ class Interpreter:
                 except (BrokenPipeError, ConnectionResetError):
                     pass
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     try:
                         self.send_response(500)
+                        self.send_header('Content-Type', 'text/plain')
                         self.end_headers()
                         if self.command != 'HEAD':
                             self.wfile.write(str(e).encode())

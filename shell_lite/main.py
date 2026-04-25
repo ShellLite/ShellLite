@@ -683,7 +683,7 @@ def main():
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "--version" or cmd == "-v":
-             print("ShellLite v0.6")
+             print("ShellLite v0.6.0.P")
         elif cmd == "get":
             if len(sys.argv) > 2:
                 package_name = sys.argv[2]

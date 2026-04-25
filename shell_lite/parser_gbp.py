@@ -1,9 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
-
 from .ast_nodes import *
 from .lexer import Token
-
 
 @dataclass
 class GeoNode:
@@ -282,7 +280,10 @@ class GeometricBindingParser:
                         ast_node = self.bind_assignment(node)
                     return self._set_node_loc(ast_node, node)
             
-            ast_node = self.bind_call_or_expr(node)
+            if any(t.type == 'DOT' for t in node.tokens):
+                ast_node = self.bind_expression_statement(node)
+            else:
+                ast_node = self.bind_call_or_expr(node)
             return self._set_node_loc(ast_node, node)
             
         ast_node = self.bind_expression_statement(node)
@@ -1259,11 +1260,11 @@ class GeometricBindingParser:
         # Local precedence for shunting-yard (fallback if not in self.precedence)
         local_precedence = {
             'PLUS': 10, 'MINUS': 10,
-            'STAR': 20, 'SLASH': 20, 'MOD': 20,
-            'GREATER': 5, 'LESS': 5, 'EQUAL': 4,
+            'MUL': 20, 'DIV': 20, 'MOD': 20,
+            'GT': 5, 'LT': 5, 'EQ': 4,
             'AND': 2, 'OR': 1,
             'MATCHES': 5, 'IS': 4, 'BE': 4, 'CONTAINS': 5,
-            'DOT': 30
+            'DOT': 30, 'NOT': 15
         }
         
         def apply_op():
@@ -1271,7 +1272,15 @@ class GeometricBindingParser:
             if not ops:
                 return
             op_type = ops.pop()
-            if len(values) >= 2:
+            unary_ops = ('NOT', 'MINUS_UNARY')
+            if op_type in unary_ops:
+                if len(values) >= 1:
+                    right = values.pop()
+                    op_str = 'not' if op_type == 'NOT' else '-'
+                    values.append(UnaryOp(op_str, right))
+                else:
+                    raise SyntaxError(f"Invalid expression: missing operand for unary {op_type}")
+            elif len(values) >= 2:
                 right = values.pop()
                 left = values.pop()
                 op_map = {
@@ -1313,9 +1322,13 @@ class GeometricBindingParser:
                 )
                 if is_unary:
                     values.append(Number(0))
-                    ops.append('MINUS')
+                    ops.append('MINUS_UNARY')
                     i += 1
                     continue
+            if t.type == 'NOT':
+                ops.append('NOT')
+                i += 1
+                continue
             if t.type == 'NUMBER':
                 val = Number(
                     int(t.value) if '.' not in t.value else float(t.value)
@@ -1331,6 +1344,13 @@ class GeometricBindingParser:
                 val.col = t.column
                 val.end_line = t.line
                 val.end_col = t.column + len(t.value) + 2 # +2 for quotes
+                values.append(val)
+            elif t.type in ('YES', 'NO'):
+                val = Boolean(t.type == 'YES')
+                val.line = t.line
+                val.col = t.column
+                val.end_line = t.line
+                val.end_col = t.column + len(t.value)
                 values.append(val)
             elif t.type == 'LBRACKET':
                 is_indexing = False
@@ -1653,7 +1673,7 @@ class GeometricBindingParser:
                 'CONTAINS', 'EMPTY', 'JSON', 'HTTP',
                 'BUTTON', 'HEADING', 'PARAGRAPH', 'IMAGE', 'START', 'SERVER',
                 'READ', 'WRITE', 'OPEN', 'CLOSE', 'UPDATE', 'DELETE', 'FIND', 'CREATE', 'COUNT', 'INSERT',
-                'ERROR'
+                'ERROR', 'EXECUTE', 'COPY'
             ):
                 if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
                     name = t.value

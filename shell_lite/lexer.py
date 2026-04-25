@@ -199,6 +199,12 @@ class Lexer:
                 )
                 pos += 13
                 continue
+            elif rest_of_line.startswith('is not '):
+                self.tokens.append(
+                    Token('NEQ', '!=', self.line_number, current_col)
+                )
+                pos += 7
+                continue
             elif rest_of_line.startswith('is not in '):
                 self.tokens.append(
                     Token('NOTIN', 'not in', self.line_number, current_col)
