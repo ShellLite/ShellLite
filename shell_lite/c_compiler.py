@@ -3,7 +3,7 @@ from .ast_nodes import *
 class CCompiler:
     def __init__(self):
         self.indent_level = 0
-        self.vars = set() # Track variables for declarations
+        self.vars = set()
 
     def indent(self):
         return "    " * self.indent_level
@@ -15,8 +15,6 @@ class CCompiler:
         body = ""
         for stmt in statements:
             body += self.visit(stmt) + "\n"
-        
-        # Simple C header
         header = (
             "#include <stdio.h>\n"
             "#include <stdlib.h>\n"
@@ -25,21 +23,14 @@ class CCompiler:
             "// --- ShellLite Runtime Helpers ---\n"
             "void slang_print_num(double n) { printf(\"%g\\n\", n); }\n"
             "void slang_print_str(const char* s) { printf(\"%s\\n\", s); }\n\n"
-        )
-        
-        # We'll wrap top-level statements in a main function if they aren't already
-        # However, ShellLite scripts often have top-level calls.
-        # For simplicity, we'll wrap everything in a main() function for now.
-        
+        )    
         main_func = (
             "int main(int argc, char** argv) {\n"
             + body
             + "    return 0;\n"
             + "}\n"
         )
-        
         return header + main_func
-
     def visit(self, node):
         method_name = f'visit_{type(node).__name__}'
         visitor = getattr(self, method_name, self.generic_visit)
@@ -62,9 +53,6 @@ class CCompiler:
 
     def visit_Assign(self, node):
         val = self.visit_expr(node.value)
-        # In C, we'd ideally declare variables at the top. 
-        # For this prototype, we'll use 'auto' style (double for numbers) 
-        # or just assume doubles for simplicity.
         if node.name not in self.vars:
             self.vars.add(node.name)
             return f"double {node.name} = {val};"
@@ -72,8 +60,7 @@ class CCompiler:
 
     def visit_Print(self, node):
         expr = self.visit_expr(node.expression)
-        # Use our runtime helper
-        return f"slang_print_num({expr});" # Default to num for prototype
+        return f"slang_print_num({expr});"
 
     def visit_If(self, node):
         cond = self.visit_expr(node.condition)
