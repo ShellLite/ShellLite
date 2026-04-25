@@ -14,7 +14,4 @@ sys.path.insert(0, base_dir)
 from .main import main
 
 if __name__ == "__main__":
-    """
-    -----Purpose: Main execution entry point.
-    """
     main()
