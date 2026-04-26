@@ -1,6 +1,8 @@
 import random
 from typing import List
+
 from .ast_nodes import *
+
 
 class Compiler:
     """

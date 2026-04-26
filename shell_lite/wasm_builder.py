@@ -1,7 +1,9 @@
 import os
-import subprocess
 import shutil
+import subprocess
+
 from .c_compiler import CCompiler
+
 
 class WASMBuilder:
     def __init__(self, output_dir="dist_wasm"):

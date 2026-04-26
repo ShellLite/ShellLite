@@ -5,6 +5,7 @@ import importlib
 import json
 import math
 import os
+import queue
 import random
 import re
 import shutil
@@ -12,7 +13,6 @@ import sqlite3
 import subprocess
 import sys
 import threading
-import queue
 import time
 
 try:

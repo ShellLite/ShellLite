@@ -1,14 +1,14 @@
 import unittest
-import time
-import os
-import sys
+
 import shell_lite
+
 print(f"Test using shell_lite from: {shell_lite.__file__}")
 
+from shell_lite.ast_nodes import *
+from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.interpreter import Interpreter
-from shell_lite.ast_nodes import *
+
 
 class TestThreads(unittest.TestCase):
     def setUp(self):

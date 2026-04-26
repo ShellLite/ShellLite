@@ -1,8 +1,10 @@
-import unittest
 import os
+import unittest
+
+from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.interpreter import Interpreter
+
 
 class TestORM(unittest.TestCase):
     def setUp(self):

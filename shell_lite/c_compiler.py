@@ -1,5 +1,6 @@
 from .ast_nodes import *
 
+
 class CCompiler:
     def __init__(self):
         self.indent_level = 0

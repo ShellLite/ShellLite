@@ -1,7 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
+
 from .ast_nodes import *
 from .lexer import Token
+
 
 @dataclass
 class GeoNode:

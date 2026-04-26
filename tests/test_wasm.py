@@ -1,10 +1,12 @@
-import unittest
 import os
 import shutil
+import unittest
+
+from shell_lite.c_compiler import CCompiler
 from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
-from shell_lite.c_compiler import CCompiler
 from shell_lite.wasm_builder import WASMBuilder
+
 
 class TestWASM(unittest.TestCase):
     def test_c_transpilation(self):

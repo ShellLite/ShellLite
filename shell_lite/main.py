@@ -320,8 +320,8 @@ def search_package(query=None):
     -----Purpose: Searches GitHub for repositories tagged with 'shell-lite'
     -----        or 'ShellLite'. Displays stars and last update time.
     """
-    import urllib.request as request
     import json
+    import urllib.request as request
     
     tag_query = "topic:shell-lite+topic:ShellLite"
     if query:

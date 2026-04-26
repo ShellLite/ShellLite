@@ -2,19 +2,17 @@
 TODO:- Add proper Docstrings/Comments
 """
 import json
-import sys
-import os
 import logging
-from typing import Any, List, Dict, Optional, Tuple
+import sys
+from typing import Any, Dict, List, Optional
+
 logging.basicConfig(filename="shell_lite_lsp.log", level=logging.DEBUG, filemode="w")
 logger = logging.getLogger("LSP")
 
-from .ast_nodes import (
-    Assign, TypedAssign, ClassDef, FunctionDef, Node, 
-    VarAccess, Call, MethodCall, PropertyAssign, PropertyAccess
-)
+from .ast_nodes import Assign, ClassDef, FunctionDef, Node, TypedAssign, VarAccess
 from .lexer import Lexer
 from .parser_gbp import GeometricBindingParser
+
 
 # ---------------------------------------------------------------------------
 # LSP Constants & Types
