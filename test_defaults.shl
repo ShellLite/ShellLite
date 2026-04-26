@@ -1,9 +1,0 @@
-thing Item
-    has name
-    has quantity = 1
-
-i1 is Item "Apple"
-say i1.name + " x" + i1.quantity
-
-i2 is Item "Banana" 5
-say i2.name + " x" + i2.quantity

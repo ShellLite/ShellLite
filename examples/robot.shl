@@ -5,7 +5,7 @@ structure Robot
         say "Bleep Bloop! I am " + name
         say "Battery: " + battery + "%"
     to walk
-        say name + " is walking... 🚶"
+        say name + " is walking..."
         battery = battery - 10
 robby is Robot "Robby" 100
 sparky is Robot "Sparky" 100

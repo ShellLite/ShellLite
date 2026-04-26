@@ -1,2 +1,0 @@
-to greet name:
-    say "Hello " + name
