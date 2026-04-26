@@ -1,0 +1,31 @@
+# Test begin/end block syntax
+
+to eat
+begin
+    say "eating"
+end
+
+to drink
+begin
+    say "drinking"
+end
+
+# Call the functions
+eat
+drink
+
+# Test with if statement
+x = 10
+if x > 5
+begin
+    say "x is big"
+end
+
+# Test nested begin/end
+if x > 0
+begin
+    if x > 5
+    begin
+        say "nested works"
+    end
+end

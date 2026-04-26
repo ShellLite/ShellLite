@@ -1,8 +1,10 @@
 import os
-import sys
 import shutil
+import sys
 import winreg
 from pathlib import Path
+
+
 def is_admin():
     try:
         return os.getuid() == 0

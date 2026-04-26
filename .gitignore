@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -15,13 +16,28 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# Virtual Env
-venv/
-env/
-ENV/
+# PyInstaller
+*.manifest
+*.spec
+
+# Build artifacts
+*.exe
+*.ll
+*.obj
+*.pdb
+*.bc
+
+# Logs
+*.log
+error.txt
+
+# Local settings
+.vscode/
+.idea/
+
+# Temporary test files
+tests/temp_*.shl

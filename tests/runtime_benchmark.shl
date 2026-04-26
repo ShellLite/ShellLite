@@ -1,0 +1,12 @@
+
+# Heavy Loop Benchmark
+i = 0
+sum = 0
+count = 100000000 # 100 Million
+while i < count:
+    sum = sum + 1
+    i = i + 1
+
+# Only print at end to measure pure compute
+print "Done"
+print sum

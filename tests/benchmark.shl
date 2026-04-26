@@ -1,0 +1,23 @@
+x = 0
+# Repeat many times
+var_0 = 0
+var_1 = 1
+var_2 = 2
+var_3 = 3
+var_4 = 4
+var_5 = 5
+var_6 = 6
+var_7 = 7
+var_8 = 8
+var_9 = 9
+# ... repeated pattern would go here for real stress test
+x = var_0 + var_1 + var_2 * 3
+if x > 10:
+    print "High"
+    y = x * 2
+
+# Nested structure
+if x > 0:
+    if x > 1:
+        if x > 2:
+            print "Deep"

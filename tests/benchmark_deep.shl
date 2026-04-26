@@ -1,0 +1,56 @@
+# Deep nesting benchmark - GBP should excel here
+x = 1
+y = 2
+z = 3
+
+if x > 0:
+    if y > 0:
+        if z > 0:
+            if x > 0:
+                if y > 0:
+                    if z > 0:
+                        if x > 0:
+                            if y > 0:
+                                print "Very deep"
+                                a = x + y + z
+                                b = a * 2
+                            print "8"
+                        print "7"
+                    print "6"
+                print "5"
+            print "4"
+        print "3"
+    print "2"
+print "1"
+
+# More nested structures
+if x == 1:
+    if y == 2:
+        if z == 3:
+            print "match"
+            result = x * y * z
+
+# Functions with nesting
+to compute n:
+    if n > 10:
+        if n > 20:
+            if n > 30:
+                return n * 2
+            return n + 10
+        return n + 5
+    return n
+
+# Another deep chain
+a = 1
+if a > 0:
+    b = 2
+    if b > 0:
+        c = 3
+        if c > 0:
+            d = 4
+            if d > 0:
+                e = 5
+                if e > 0:
+                    f = 6
+                    if f > 0:
+                        print "6 levels deep"

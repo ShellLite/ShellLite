@@ -1,8 +1,0 @@
-when someone visits "/block"
-    wait 5 seconds
-    return "slept"
-
-when someone visits "/ping"
-    return "pong"
-
-listen on port 8085
