@@ -1,0 +1,22 @@
+say "--- Testing ShellLite v0.02.1 Natural Syntax ---"
+say "\n1. Natural Comparisons"
+score = 100
+if score is at least 100
+    say "Score is at least 100 (Pass)"
+if score is exactly 100
+    say "Score is exactly 100 (Pass)"
+if score is more than 50
+    say "Score is more than 50 (Pass)"
+say "\n2. Filler Words"
+if the score is more than 90
+    say "The score check passed (Filler word 'the' works)"
+say "\n3. Natural Wait"
+say "Waiting for 1 second..."
+wait for 1 second
+say "Wait complete"
+say "\n4. Descriptive Collections"
+fruits = a list of "apple", "banana"
+say "List: " + fruits
+ids = a unique set of 1, 2, 2, 3
+say "Set: " + ids
+say "\n--- v0.02.1 Test Complete ---"

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0,<70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shell-lite"
+version = "0.04.0"
+description = "A lightweight, English-like scripting language."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "Shrey Naithani", email = "contact@shelllite.tech"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = ["prompt_toolkit>=3.0.0"]
+
+[project.scripts]
+shl = "shell_lite.main:main"
+
+[tool.setuptools]
+packages = ["shell_lite"]

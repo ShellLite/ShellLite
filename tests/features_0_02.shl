@@ -1,0 +1,42 @@
+say "--- Testing ShellLite v0.02 Features ---"
+say "\n1. Regex"
+email = "test@example.com"
+if email matches /^[a-z]+@[a-z]+\.[a-z]+$/
+    say "Regex Match Passed!"
+else
+    say "Regex Match Failed!"
+say "\n2. Sets"
+myset = Set([1, 2, 2, 3])
+say "Set: " + myset
+myset.add(4)
+say "Set after add: " + myset
+if myset.__contains__(4) 
+    say "Set contains 4"
+say "\n3. Interpolation"
+name = "World"
+val = 10
+say "Hello {name}, 10+10 is {10+10}"
+say "\n4. Async"
+to slow_task n
+    sleep n
+    give "Done sleeping " + n
+say "Starting async task..."
+task = spawn slow_task(1)
+say "Doing checking in main thread..."
+res = await task
+say "Async Result: " + res
+say "\n5. Types"
+to add_int a:int b:int
+    give a + b
+try
+    say add_int(5, 5)
+    say "Int check passed"
+catch e
+    say "Error: " + e
+try
+    add_int("5", 5)
+    say "Type check FAILED (should have errored)"
+catch e
+    say "Type check Caught: " + e
+say "\n6. GUI"
+say "\n--- Test Complete ---"

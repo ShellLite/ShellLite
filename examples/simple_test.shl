@@ -1,0 +1,38 @@
+say "--- Basic Tests ---"
+say "1. Repeat:"
+repeat 3 times
+    say "  Hi!"
+say "2. Unless:"
+done = no
+unless done
+    say "  Not done!"
+say "3. Until:"
+n = 0
+until n == 2
+    n = n + 1
+    say "  n = " + str n
+say "4. Stop:"
+repeat 5 times
+    say "  looping..."
+    stop
+say "5. Skip:"
+repeat 3 times
+    skip
+    say "  never shown"
+say "6. When:"
+x = 2
+when x
+    is 1
+        say "  one"
+    is 2
+        say "  two"
+    otherwise
+        say "  other"
+say "7. Error:"
+try
+    error "oops!"
+catch e
+    say "  caught: " + e
+say "8. Execute:"
+execute "say '  dynamic!'"
+say "=== Done! ==="

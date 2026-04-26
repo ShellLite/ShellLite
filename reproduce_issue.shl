@@ -1,0 +1,14 @@
+thing Car
+    has make
+    has model
+    has speed = 0
+
+    can drive amount
+        speed += amount
+        say "Vroom! Going " + speed
+
+make Car "Toyota" "Corolla"
+c is Car "Honda" "Civic"
+c.drive 10
+say c.make
+say c.speed

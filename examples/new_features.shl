@@ -1,0 +1,13 @@
+say in red "This should be RED"
+say bold green "This should be BOLD GREEN"
+say in blue "This is BLUE"
+data = { "id": 1, "name": "ShellLite" }
+json_str = convert data to json
+say "JSON Output: " + json_str
+say "Starting Progress..."
+show progress for i in range 1 20
+   wait 0.1
+say "Progress Complete!"
+say "Waiting for 2 seconds..."
+in 2 seconds
+   say "This message appears after 2 seconds!"
