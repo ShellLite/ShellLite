@@ -76,6 +76,7 @@ class FunctionDef(Node):
 class Call(Node):
     name: str
     args: List[Node]
+    kwargs: Optional[List[tuple[str, Node]]] = None
     body: Optional[List[Node]] = None 
 @dataclass
 class Return(Node):
@@ -91,11 +92,13 @@ class Instantiation(Node):
     var_name: str
     class_name: str
     args: List[Node]
+    kwargs: Optional[List[tuple[str, Node]]] = None
 @dataclass
 class MethodCall(Node):
     instance_name: str
     method_name: str
     args: List[Node]
+    kwargs: Optional[List[tuple[str, Node]]] = None
 @dataclass
 class PropertyAccess(Node):
     instance_name: str
@@ -276,6 +279,11 @@ class DatabaseOp(Node):
 class PythonImport(Node):
     module_name: str
     alias: Optional[str]
+
+@dataclass
+class FromImport(Node):
+    module_name: str
+    names: List[tuple[str, Optional[str]]]
 
 @dataclass
 class App(Node):

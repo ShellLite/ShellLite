@@ -12,6 +12,7 @@ from .ast_nodes import *
 import json
 def execute_source(source: str, interpreter: Interpreter):
     lines = source.split('\n')
+
     import difflib
     try:
         lexer = Lexer(source)
@@ -52,6 +53,11 @@ def run_file(filename: str):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
+    import sys
+
+    # Debug prints removed for production
+    from .interpreter import Interpreter
+    
     with open(filename, 'r', encoding='utf-8') as f:
         source = f.read()
     interpreter = Interpreter()
@@ -61,7 +67,7 @@ def run_repl():
     print("\n" + "="*40)
     print("  ShellLite REPL - English Syntax")
     print("="*40)
-    print("Version: v0.04.0 | Made by Shrey Naithani")
+    print("Version: v0.04.6.8 | Made by Shrey Naithani")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run in CMD/PowerShell, not here.")
 
@@ -192,7 +198,7 @@ def install_globally():
         ps_cmd = f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User"); if ($oldPath -notlike "*ShellLite*") {{ [Environment]::SetEnvironmentVariable("Path", "$oldPath;{install_dir}", "User") }}'
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
         
-        print(f"\n[SUCCESS] ShellLite (v0.03.6) is installed!")
+        print(f"\n[SUCCESS] ShellLite (v0.04.6.8) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows (CMD, PowerShell, VS Code).")
@@ -477,8 +483,7 @@ def format_file(filename: str):
     except Exception as e:
         print(f"Formatting failed: {e}")
 def self_install_check():
-    res = subprocess.run(["where", "shl"], capture_output=True, text=True)
-    if "ShellLite" not in res.stdout:
+    if not shutil.which("shl"):
         print("\nShellLite is not installed globally.")
         choice = input("Would you like to install it so 'shl' works everywhere? (y/n): ").lower()
         if choice == 'y':
@@ -551,6 +556,11 @@ def main():
                 line = int(sys.argv[3])
                 col = int(sys.argv[4])
                 resolve_cursor(filename, line, col)
+        elif cmd == "run":
+            if len(sys.argv) > 2:
+                run_file(sys.argv[2])
+            else:
+                print("Usage: shl run <filename>")
         else:
             run_file(sys.argv[1])
     else:

@@ -25,8 +25,8 @@ class Lexer:
                 continue
             indent_level = len(line) - len(line.lstrip())
             if stripped_line.startswith('#'):
-                self.tokens.append(Token('COMMENT', stripped_line, self.line_number, indent_level + 1))
-                self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
+                # self.tokens.append(Token('COMMENT', stripped_line, self.line_number, indent_level + 1))
+                # self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
                 continue
             if indent_level > self.indent_stack[-1]:
                 self.indent_stack.append(indent_level)
@@ -165,7 +165,8 @@ class Lexer:
                         'while': 'WHILE', 'until': 'UNTIL',
                         'repeat': 'REPEAT', 'forever': 'FOREVER',
                         'stop': 'STOP', 'skip': 'SKIP', 'exit': 'EXIT',
-                        'each': 'FOR',
+                        'each': 'EACH',
+                        'check': 'CHECK',
                         'unless': 'UNLESS', 'when': 'WHEN', 'otherwise': 'OTHERWISE',
                         'then': 'THEN', 'do': 'DO',
                         'print': 'PRINT', 'say': 'SAY', 'show': 'SAY',
@@ -181,9 +182,9 @@ class Lexer:
                         'true': 'YES', 'false': 'NO',
                         'const': 'CONST',
                         'and': 'AND', 'or': 'OR', 'not': 'NOT',
-                        'try': 'TRY', 'catch': 'CATCH', 'always': 'ALWAYS',
-                        'error': 'ERROR',
+                        'try': 'TRY', 'catch': 'CATCH', 'always': 'ALWAYS', 'finally': 'ALWAYS',
                         'use': 'USE', 'as': 'AS', 'share': 'SHARE',
+                        'import': 'IMPORT',
                         'execute': 'EXECUTE', 'run': 'EXECUTE',
                         'alert': 'ALERT', 'prompt': 'PROMPT', 'confirm': 'CONFIRM',
                         'spawn': 'SPAWN', 'await': 'AWAIT',
@@ -195,7 +196,7 @@ class Lexer:
                         'copy': 'COPY', 'paste': 'PASTE', 'clipboard': 'CLIPBOARD',
                         'press': 'PRESS', 'type': 'TYPE', 'click': 'CLICK', 'at': 'AT',
                         'notify': 'NOTIFY',
-                        'date': 'DATE', 'today': 'TODAY', 'after': 'AFTER', 'before': 'BEFORE',
+                        'date': 'ID', 'today': 'ID', 'after': 'AFTER', 'before': 'BEFORE',
                         'list': 'LIST', 'set': 'SET', 'unique': 'UNIQUE', 'of': 'OF',
                         'wait': 'WAIT',
                         'convert': 'CONVERT', 'json': 'JSON',
@@ -219,13 +220,29 @@ class Lexer:
                         'using': 'USING', 'component': 'PAGE',
                         'heading': 'HEADING', 'paragraph': 'PARAGRAPH',
                         'image': 'IMAGE',
-                        'add': 'ADD', 'put': 'ADD', 'into': 'INTO',
+                        'add': 'ADD', 'put': 'ADD', 'into': 'INTO', 'push': 'ADD',
                         'count': 'COUNT', 'many': 'MANY', 'how': 'HOW',
                         'field': 'FIELD', 'submit': 'SUBMIT', 'named': 'NAMED',
                         'placeholder': 'PLACEHOLDER',
-                        'app': 'APP', 'title': 'TITLE', 'size': 'SIZE',
+                        'app': 'APP', 'title': 'ID', 'size': 'SIZE',
                         'column': 'COLUMN', 'row': 'ROW',
-                        'button': 'BUTTON', 'heading': 'HEADING', 'text': 'TEXT',
+                        'button': 'BUTTON', 'heading': 'HEADING', 
+                        'sum': 'SUM', 'upper': 'UPPER', 'lower': 'LOWER',
+                        'increment': 'INCREMENT', 'decrement': 'DECREMENT',
+                        'multiply': 'MULTIPLY', 'divide': 'DIVIDE',
+                        'subtract': 'SUBTRACT',
+                        'be': 'BE', 'by': 'BY',
+                        'plus': 'PLUS', 'minus': 'MINUS', 'divided': 'DIV',
+                        'greater': 'GREATER', 'less': 'LESS', 'equal': 'EQUAL',
+                        'define': 'DEFINE', 'function': 'FUNCTION',
+                        'contains': 'CONTAINS', 'empty': 'EMPTY',
+                        'remove': 'REMOVE',
+                        'than': 'THAN',
+                        'doing': 'DOING',
+                        'make': 'MAKE', 'be': 'BE',
+                        'as': 'AS', 'long': 'LONG',
+                        'otherwise': 'OTHERWISE',
+                        'ask': 'ASK',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(Token(token_type, value, self.line_number, current_col))

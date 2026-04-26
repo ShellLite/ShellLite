@@ -1,0 +1,9 @@
+python import subprocess
+
+run = subprocess.run
+args = ["cmd", "/c", "echo", "hello"]
+
+# Test kwargs
+# ShellLite identifiers for kwargs parsing was enabled in Call
+res = run(args, capture_output=True, text=True)
+print res.stdout

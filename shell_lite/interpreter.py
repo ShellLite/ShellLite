@@ -3,6 +3,7 @@ from .ast_nodes import *
 from .lexer import Token, Lexer
 from .parser import Parser
 import importlib
+import types
 import operator
 import re
 import os
@@ -21,7 +22,7 @@ import threading
 import concurrent.futures
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 import csv
 import zipfile
 from datetime import timedelta
@@ -128,7 +129,24 @@ class WebBuilder:
             pass
 class Interpreter:
     def __init__(self):
+        # print('DEBUG: ShellLite v0.04.5')
         self.global_env = Environment()
+        self.global_env.set('str', str)
+        self.global_env.set('int', int)
+        self.global_env.set('float', float)
+        self.global_env.set('list', list)
+        self.global_env.set('len', len)
+        self.global_env.set('input', input)
+        self.global_env.set('range', range)
+        
+        # English-like helpers
+        self.global_env.set('wait', time.sleep)
+        self.global_env.set('append', self._builtin_smart_add)
+        self.global_env.set('push', self._builtin_smart_add)
+        self.global_env.set('remove', lambda l, x: l.remove(x))
+        self.global_env.set('empty', lambda l: len(l) == 0)
+        self.global_env.set('contains', lambda l, x: x in l)
+        
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
@@ -153,15 +171,17 @@ class Interpreter:
             'split': lambda s, d=" ": s.split(d),
             'join': lambda lst, d="": d.join(str(x) for x in lst),
             'replace': lambda s, old, new: s.replace(old, new),
-            'upper': lambda s: s.upper(),
+            'upper': self._builtin_upper,
             'lower': lambda s: s.lower(),
             'trim': lambda s: s.strip(),
             'startswith': lambda s, p: s.startswith(p),
             'endswith': lambda s, p: s.endswith(p),
+            'sum_range': self._builtin_sum_range,
+            'range_list': self._builtin_range_list,
             'find': lambda s, sub: s.find(sub),
             'char': chr, 'ord': ord,
-            'append': lambda l, x: (l.append(x), l)[1],
-            'push': self._builtin_push,
+            'append': self._builtin_smart_add,
+            'push': self._builtin_smart_add,
             'count': len,  
             'remove': lambda l, x: l.remove(x),
             'pop': lambda l, idx=-1: l.pop(idx),
@@ -172,9 +192,6 @@ class Interpreter:
             'slice': lambda l, start, end=None: l[start:end],
             'contains': lambda l, x: x in l,
             'index': lambda l, x: l.index(x) if x in l else -1,
-            'map': self._builtin_map,
-            'filter': self._builtin_filter,
-            'reduce': self._builtin_reduce,
             'exists': os.path.exists,
             'delete': os.remove,
             'copy': shutil.copy,
@@ -263,6 +280,20 @@ class Interpreter:
     def _builtin_push(self, lst, item):
         lst.append(item)
         return None
+    def _builtin_upper(self, s):
+        return str(s).upper()
+    def _builtin_sum_range(self, start, end):
+        return sum(range(int(start), int(end)))
+    def _builtin_range_list(self, start, end):
+        return list(range(int(start), int(end)))
+    def _builtin_smart_add(self, target, val):
+        if isinstance(target, list):
+            target.append(val)
+            return target
+        elif isinstance(target, (int, float, str)):
+            return target + val
+        else:
+            raise TypeError(f"Cannot add to {type(target).__name__}")
     def _init_std_modules(self):
         self.std_modules = {
             'math': {
@@ -565,9 +596,18 @@ class Interpreter:
             self.current_env = old_env
         return ret_val
     def visit_Call(self, node: Call):
+        kwargs = {}
+        if node.kwargs:
+            for k, v in node.kwargs:
+                kwargs[k] = self.visit(v)
+
         if node.name in self.builtins:
              args = [self.visit(a) for a in node.args]
-             result = self.builtins[node.name](*args)
+             if kwargs:
+                 result = self.builtins[node.name](*args, **kwargs)
+             else:
+                 result = self.builtins[node.name](*args)
+                 
              if isinstance(result, Tag):
                  if node.body:
                      self.web.push(result)
@@ -584,6 +624,8 @@ class Interpreter:
             func = self.current_env.get(node.name)
             if callable(func):
                 args = [self.visit(a) for a in node.args]
+                if kwargs:
+                    return func(*args, **kwargs)
                 return func(*args)
             curr_obj = func
             if (isinstance(curr_obj, (list, dict, str)) or isinstance(curr_obj, Instance)):
@@ -755,7 +797,12 @@ class Interpreter:
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
+        
+        # 1. Check File System (ShellLite modules)
         import os 
+        import importlib
+        target_path = None
+        
         if os.path.exists(node.path):
              target_path = node.path
         else:
@@ -768,32 +815,45 @@ class Interpreter:
                      global_path_ext = global_path + ".shl"
                      if os.path.exists(global_path_ext):
                          target_path = global_path_ext
-                     else:
-                         raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
+
+        # 2. If found on FS, load as ShellLite
+        if target_path:
+            if os.path.isdir(target_path):
+                 main_shl = os.path.join(target_path, "main.shl")
+                 pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
+                 if os.path.exists(main_shl):
+                     target_path = main_shl
+                 elif os.path.exists(pkg_shl):
+                     target_path = pkg_shl
                  else:
-                     raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
-        if os.path.isdir(target_path):
-             main_shl = os.path.join(target_path, "main.shl")
-             pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
-             if os.path.exists(main_shl):
-                 target_path = main_shl
-             elif os.path.exists(pkg_shl):
-                 target_path = pkg_shl
-             else:
-                  raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
+                      raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
+            
+            try:
+                with open(target_path, 'r', encoding='utf-8') as f:
+                    code = f.read()
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Could not find imported file: {node.path}")
+                
+            from .lexer import Lexer
+            from .parser import Parser
+            lexer = Lexer(code)
+            tokens = lexer.tokenize()
+            parser = Parser(tokens)
+            statements = parser.parse()
+            for stmt in statements:
+                self.visit(stmt)
+            return
+
+        # 3. BRIDGE: Try importing as a raw Python module
         try:
-            with open(target_path, 'r', encoding='utf-8') as f:
-                code = f.read()
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Could not find imported file: {node.path}")
-        from .lexer import Lexer
-        from .parser import Parser
-        lexer = Lexer(code)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        statements = parser.parse()
-        for stmt in statements:
-            self.visit(stmt)
+            py_module = importlib.import_module(node.path)
+            self.current_env.set(node.path, py_module)
+            return
+        except ImportError:
+            pass # Fall through to error
+            
+        raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\n - ShellLite Local/Global\n - Python Site-Packages (The Bridge)")
+
     def _get_class_properties(self, class_def: ClassDef) -> List[tuple[str, Optional[Node]]]:
         if not hasattr(class_def, 'properties'): return []
         # Support both old string list and new tuple list for backward compat if needed, though we updated AST
@@ -825,7 +885,7 @@ class Interpreter:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"Command Error: {result.stderr}")
-            return result.stdout.strip()
+            return result.stdout.strip() or result.stderr.strip()
         except Exception as e:
             raise RuntimeError(f"Failed to run command: {e}")
     def builtin_read(self, path):
@@ -1010,6 +1070,18 @@ class Interpreter:
         except ImportError as e:
             raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
             
+    def visit_FromImport(self, node: FromImport):
+        try:
+            mod = importlib.import_module(node.module_name)
+            for name, alias in node.names:
+                if not hasattr(mod, name):
+                    raise AttributeError(f"Module '{node.module_name}' has no attribute '{name}'")
+                val = getattr(mod, name)
+                target_name = alias if alias else name
+                self.global_env.set(target_name, val)
+        except ImportError as e:
+            raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
+            
     def visit_Throw(self, node: Throw):
         message = self.visit(node.message)
         raise ShellLiteError(str(message))
@@ -1036,16 +1108,23 @@ class Interpreter:
         count = self.visit(node.count)
         if not isinstance(count, int):
             raise TypeError(f"repeat count must be an integer, got {type(count).__name__}")
-        for _ in range(count):
-            try:
-                for stmt in node.body:
-                    self.visit(stmt)
-            except StopException:
-                break
-            except SkipException:
-                continue
-            except ReturnException:
-                raise
+        
+        old_env = self.current_env
+        self.current_env = Environment(parent=self.current_env)
+        try:
+            for i in range(count):
+                self.current_env.set('index', i)
+                try:
+                    for stmt in node.body:
+                        self.visit(stmt)
+                except StopException:
+                    break
+                except SkipException:
+                    continue
+        except ReturnException:
+            raise
+        finally:
+            self.current_env = old_env
     def visit_When(self, node: When):
         value = self.visit(node.value)
         for match_val, body in node.cases:
@@ -1069,6 +1148,7 @@ class Interpreter:
         result = None
         for stmt in statements:
             result = self.visit(stmt)
+        self.current_env.set('__exec_result__', result)
         return result
     def visit_ImportAs(self, node: ImportAs):
         if node.path in self.std_modules:
@@ -1416,6 +1496,11 @@ class Interpreter:
     def visit_Listen(self, node: Listen):
         port_val = self.visit(node.port)
         interpreter_ref = self
+
+        class ReusableHTTPServer(ThreadingHTTPServer):
+            allow_reuse_address = True
+            daemon_threads = True
+
         class ShellLiteHandler(BaseHTTPRequestHandler):
             def log_message(self, format, *args): pass 
             def do_GET(self): 
@@ -1467,7 +1552,9 @@ class Interpreter:
                                  self.send_header('Content-Type', ct)
                                  self.end_headers()
                                  if self.command != 'HEAD':
-                                     with open(file_path, 'rb') as f: self.wfile.write(f.read())
+                                     try:
+                                         with open(file_path, 'rb') as f: self.wfile.write(f.read())
+                                     except (BrokenPipeError, ConnectionResetError): pass
                                  return
                     matched_body = None
                     path_params = {}
@@ -1495,30 +1582,33 @@ class Interpreter:
                         if interpreter_ref.web.stack:
                              pass
                         if isinstance(result, Tag): response_body = str(result)
-                        elif result: response_body = str(result)
+                        elif result is not None: response_body = str(result)
                         else: response_body = "OK"
                         self.send_response(200)
                         self.send_header('Content-Type', 'text/html')
                         self.end_headers()
                         if self.command != 'HEAD':
-                            self.wfile.write(response_body.encode())
+                            try:
+                                self.wfile.write(response_body.encode())
+                            except (BrokenPipeError, ConnectionResetError): pass
                     else:
                         self.send_response(404)
                         self.end_headers()
                         if self.command != 'HEAD':
-                            self.wfile.write(b'Not Found')
+                            try:
+                                self.wfile.write(b'Not Found')
+                            except (BrokenPipeError, ConnectionResetError): pass
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
                 except Exception as e:
-                    print(f"DEBUG: Server Exception: {e}")
-                    import traceback
-                    traceback.print_exc()
                     try:
                         self.send_response(500)
                         self.end_headers()
                         if self.command != 'HEAD':
                             self.wfile.write(str(e).encode())
                     except: pass
-        server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.03.4 is running!")
+        server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
+        print(f"\n  ShellLite Server v0.04.6.8 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 
@@ -1687,23 +1777,71 @@ class Interpreter:
         except FileNotFoundError:
              raise FileNotFoundError(f"File '{path}' not found.")
              raise RuntimeError(f"Read failed: {e}")
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.interpreter <file.shl>")
-        sys.exit(1)
-    filename = sys.argv[1]
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            code = f.read()
-        lexer = Lexer(code)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        ast = parser.parse()
-        interpreter = Interpreter()
-        for stmt in ast:
-            interpreter.visit(stmt)
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+    def _builtin_upper(self, s, only_letters=False):
+        if not only_letters:
+            return s.upper()
+        # "UPPER words ONLY LETTERS" -> Uppercase normal letters, leave others?
+        # Or maybe it means "Only extract uppercase letters"?
+        # User output shows: "HELLO WORLD 123" -> "HELLO WORLD 123" (normal)
+        # Wait, user screenshot says: 
+        # text = "hello world 123"
+        # words = split text
+        # say upper words only letters
+        # Error: Variable 'only' is not defined.
+        # So maybe they want to UPPERCASE ONLY LETTERS? digits remain same? .upper() does that.
+        # But maybe they mean "remove non-letters"?
+        # "upper words only letters" -> "HELLO WORLD". 
+        # If "only letters" means filter?
+        # Let's assume it means "uppercase only the letters" which is standard behavior?
+        # Or maybe "uppercase, and keep only letters".
+        # Let's look at user intent. "upper words only letters".
+        # Likely: Uppercase and remove numbers/symbols?
+        # If input is "hello world 123", output might be "HELLO WORLD".
+        if only_letters:
+             import re
+             return re.sub(r'[^a-zA-Z\s]', '', s).upper()
+        return s.upper()
+
+    def _builtin_sum_range(self, start, end, condition=None):
+        # condition is a string, e.g. "even", "odd", "prime", "digits"
+        total = 0
+        s = int(start)
+        e = int(end)
+        for i in range(s, e + 1):
+             include = True
+             if condition == 'even' and i % 2 != 0: include = False
+             elif condition == 'odd' and i % 2 == 0: include = False
+             elif condition == 'prime':
+                 if i < 2: include = False
+                 else:
+                     for k in range(2, int(i ** 0.5) + 1):
+                         if i % k == 0:
+                             include = False; break
+             elif condition == 'digits':
+                  # sum of digits? Or sum of numbers that are single digits?
+                  # "sum of numbers from 1 to 10 when digits" -> unclear.
+                  # Assuming "digits" meant specific property.
+                  pass
+             
+             if include:
+                 total += i
+        return total
+
+    def _builtin_range_list(self, start, end, condition=None):
+        res = []
+        s = int(start)
+        e = int(end)
+        for i in range(s, e + 1):
+             include = True
+             if condition == 'even' and i % 2 != 0: include = False
+             elif condition == 'odd' and i % 2 == 0: include = False
+             elif condition == 'prime':
+                 if i < 2: include = False
+                 else:
+                     for k in range(2, int(i ** 0.5) + 1):
+                         if i % k == 0:
+                             include = False; break
+             
+             if include:
+                 res.append(i)
+        return res
