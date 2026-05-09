@@ -1,3 +1,4 @@
+import os
 import random
 from typing import List
 
@@ -10,6 +11,7 @@ class Compiler:
     """
     def __init__(self):
         self.indentation = 0
+        self.active_properties = None
     def indent(self):
         """
         -----Purpose: Returns a string of spaces based on current indentation.
@@ -227,10 +229,16 @@ class Compiler:
         elements = [self.visit(e) for e in node.elements]
         return f"{{{', '.join(elements)}}}"
     def visit_VarAccess(self, node: VarAccess):
+        if self.active_properties is not None and node.name in self.active_properties:
+            return f"self.{node.name}"
         return node.name
     def visit_Assign(self, node: Assign):
+        if self.active_properties is not None and node.name in self.active_properties:
+            return f"self.{node.name} = {self.visit(node.value)}"
         return f"{node.name} = {self.visit(node.value)}"
     def visit_ConstAssign(self, node: ConstAssign):
+        if self.active_properties is not None and node.name in self.active_properties:
+            return f"self.{node.name} = {self.visit(node.value)}"
         return f"{node.name} = {self.visit(node.value)}"
     def visit_PropertyAssign(self, node: PropertyAssign):
         return f"{node.instance_name}.{node.property_name} = {self.visit(node.value)}"
@@ -262,7 +270,7 @@ class Compiler:
         code += self.compile_block(node.body)
         self.indentation -= 1
         if node.else_body:
-            code += f"\n{self.indent()}else:\n"
+            code += f"\nelse:\n"
             self.indentation += 1
             code += self.compile_block(node.else_body)
             self.indentation -= 1
@@ -459,6 +467,15 @@ class Compiler:
         """
         -----Purpose: Compiles a ShellLite class into a Python class.
         """
+        old_props = getattr(self, 'active_properties', None)
+        prop_names = []
+        for prop in node.properties:
+            if isinstance(prop, tuple):
+                prop_names.append(prop[0])
+            else:
+                prop_names.append(prop)
+        self.active_properties = set(prop_names)
+
         parent = node.parent if node.parent else "Instance"
         code = f"class {node.name}({parent}):\n"
         self.indentation += 1
@@ -496,6 +513,7 @@ class Compiler:
             code += self.compile_block(method.body)
             self.indentation -= 1
         self.indentation -= 1
+        self.active_properties = old_props
         return code
     def visit_Instantiation(self, node: Instantiation):
         args = [self.visit(a) for a in node.args]
@@ -508,12 +526,16 @@ class Compiler:
         return f"{node.instance_name}.{node.method_name}({', '.join(args)})"
     def visit_PropertyAccess(self, node: PropertyAccess):
         return f"{node.instance_name}.{node.property_name}"
+    def visit_IndexAccess(self, node: IndexAccess):
+        return f"{self.visit(node.obj)}[{self.visit(node.index)}]"
+    def visit_IndexAssign(self, node: IndexAssign):
+        return f"{self.visit(node.obj)}[{self.visit(node.index)}] = {self.visit(node.value)}"
     def visit_Import(self, node: Import):
         if node.path in ('math', 'time', 'http', 'env', 'args', 'path', 're'):
              return f"{node.path} = STD_MODULES['{node.path}']"
         else:
              base = os.path.basename(node.path).replace('.shl', '').replace('.py', '')
-             return f"import {base}"
+             return f"from {base} import *"
     def visit_ImportAs(self, node: ImportAs):
         """
         -----Purpose: Compiles prioritized imports with aliases.
@@ -528,7 +550,7 @@ class Compiler:
         self.indentation += 1
         code += self.compile_block(node.try_body)
         self.indentation -= 1
-        code += f"\n{self.indent()}except Exception as {node.catch_var}:\n"
+        code += f"\nexcept Exception as {node.catch_var}:\n"
         self.indentation += 1
         code += self.compile_block(node.catch_body)
         self.indentation -= 1
@@ -539,11 +561,11 @@ class Compiler:
         code += self.compile_block(node.try_body)
         self.indentation -= 1
         if node.catch_body:
-            code += f"\n{self.indent()}except Exception as {node.catch_var}:\n"
+            code += f"\nexcept Exception as {node.catch_var}:\n"
             self.indentation += 1
             code += self.compile_block(node.catch_body)
             self.indentation -= 1
-        code += f"\n{self.indent()}finally:\n"
+        code += f"\nfinally:\n"
         self.indentation += 1
         code += self.compile_block(node.always_body)
         self.indentation -= 1

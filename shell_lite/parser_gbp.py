@@ -1415,6 +1415,8 @@ class GeometricBindingParser:
                 continue
             elif t.type == 'LBRACE':
                 depth = 1
+                bracket_depth = 0
+                paren_depth = 0
                 j = i + 1
                 pairs_tokens = []
                 current_pair = []
@@ -1423,11 +1425,19 @@ class GeometricBindingParser:
                         depth += 1
                     elif tokens[j].type == 'RBRACE':
                         depth -= 1
+                    elif tokens[j].type == 'LBRACKET':
+                        bracket_depth += 1
+                    elif tokens[j].type == 'RBRACKET':
+                        bracket_depth -= 1
+                    elif tokens[j].type == 'LPAREN':
+                        paren_depth += 1
+                    elif tokens[j].type == 'RPAREN':
+                        paren_depth -= 1
                     if depth == 0:
                         if current_pair:
                             pairs_tokens.append(current_pair)
                         break
-                    if tokens[j].type == 'COMMA' and depth == 1:
+                    if tokens[j].type == 'COMMA' and depth == 1 and bracket_depth == 0 and paren_depth == 0:
                         pairs_tokens.append(current_pair)
                         current_pair = []
                     else:

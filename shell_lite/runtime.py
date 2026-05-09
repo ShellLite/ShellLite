@@ -456,18 +456,77 @@ def slang_reduce(lst, func, initial=None):
             return functools.reduce(func, lst, initial)
         return functools.reduce(func, lst)
     raise TypeError("reduce requires a callable")
+def slang_add(target, val):
+    if isinstance(target, list):
+        target.append(val)
+        return target
+    elif isinstance(target, (int, float, str)):
+        return target + val
+    else:
+        raise TypeError(f"Cannot add to {type(target).__name__}")
 def slang_push(lst, item):
     """
     -----Purpose: Appends an item to a list and returns None.
     """
     lst.append(item)
     return None
+def slang_order_moves(moves, hash_move, ply):
+    import sys
+    caller_globals = sys._getframe(1).f_globals
+    killer_table = caller_globals.get('killer_table', {})
+    history_table = caller_globals.get('history_table', {})
+    EMPTY = caller_globals.get('EMPTY', 0)
+    get_piece_type = caller_globals.get('get_piece_type')
+    QUEEN = caller_globals.get('QUEEN', 5)
+    ROOK = caller_globals.get('ROOK', 4)
+    BISHOP = caller_globals.get('BISHOP', 3)
+    KNIGHT = caller_globals.get('KNIGHT', 2)
+    PAWN = caller_globals.get('PAWN', 1)
+
+    def get_move_score(m):
+        if hash_move is not None:
+            if m.from_sq == hash_move.from_sq and m.to_sq == hash_move.to_sq:
+                return 100000
+        cap = m.captured
+        if cap != EMPTY and cap != 0:
+            if get_piece_type:
+                ct = get_piece_type(cap)
+                at = get_piece_type(m.piece) if m.piece != EMPTY else 1
+                # MVV-LVA: high value victim (ct), low value attacker (at)
+                return 10000 + (ct * 100) - at
+            else:
+                return 10000
+        killers = killer_table.get(ply, [])
+        for km in killers:
+            if m.from_sq == km.from_sq and m.to_sq == km.to_sq:
+                return 8000
+        if (cap == EMPTY or cap == 0) and m.flags == 4:
+            return 5000
+        
+        # History Heuristic
+        h_key = m.from_sq * 64 + m.to_sq
+        h_score = history_table.get(h_key, 0)
+        if h_score > 0:
+            return min(h_score, 4000)
+        return 0
+
+    return sorted(moves, key=get_move_score, reverse=True)
+
 def get_builtins():
     """
     -----Purpose: Returns a global mapping of ShellLite built-in functions 
     -----        to their Python equivalents.
     """
     return {
+        'add': slang_add,
+        'xor': lambda a, b: a ^ b,
+        'ask': input,
+        'clear_dict': lambda d: d.clear(),
+        'order_moves': slang_order_moves,
+        'null': None,
+        'none': None,
+        'yes': True,
+        'no': False,
         'str': str, 'int': int, 'float': float, 'bool': bool,
         'list': list, 'len': len,
         'range': lambda *args: list(range(*args)),
