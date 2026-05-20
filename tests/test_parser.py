@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import shell_lite.ast_nodes as ast
 from shell_lite.lexer import Lexer
-from shell_lite.parser_gbp import GeometricBindingParser
+from shell_lite.parser import Parser
 
 
 class TestParser(unittest.TestCase):
@@ -17,9 +17,9 @@ class TestParser(unittest.TestCase):
     -----Purpose: Test suite for GBP core functionality.
     """
     def parse_code(self, code: str):
-        lex = Lexer(code)
-        tokens = lex.tokenize()
-        parser = GeometricBindingParser(tokens)
+        lexer = Lexer(code)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
         return parser.parse()
 
     def test_basic_assignment(self):

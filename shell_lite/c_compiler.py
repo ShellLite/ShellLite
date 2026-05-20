@@ -1,10 +1,3 @@
-"""
-Experimental C transpiler for ShellLite.
-
-This backend supports a minimal subset of the language (arithmetic, variables,
-if/else, while loops, and print). AST nodes outside this subset are emitted as
-C comments. It exists primarily to feed the WASM builder pipeline via Emscripten.
-"""
 from .ast_nodes import *
 
 
@@ -45,7 +38,6 @@ class CCompiler:
         return self.indent() + visitor(node)
 
     def generic_visit(self, node):
-        # Nodes outside the supported subset are emitted as comments.
         return f"// Not implemented: {type(node).__name__}"
 
     def visit_Number(self, node):

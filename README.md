@@ -4,7 +4,7 @@
 
 **An english Like Programming Language**
 
-ShellLite is a programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable. With version 0.6.0, ShellLite now supports native compilation via LLVM alongside its interpreted mode.
+ShellLite is a programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3--with--classpath--exception-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Version](https://img.shields.io/badge/version-0.6.0.6-green.svg)]()
@@ -34,10 +34,10 @@ ShellLite is a programming language designed to prioritize human readability. It
 |:--------|:------------|
 | **Natural Syntax** | Write code that reads like English |
 | **Dynamic Typing** | No type declarations required |
-| **Multi Target Compilation** | Compile to LLVM, JavaScript, or Python |
-| **Python Integration** | Use any Python library via The Bridge |
-| **GUI Framework** | Build desktop apps with The Canvas |
-| **Package Manager** | Manage dependencies with The Universe |
+| **Multi Target Compilation** | Compile to LLVM, JavaScript, or Python (Semi Implemented)|
+| **Python Integration** | Use any* Python library via The Bridge |
+| **GUI Framework** | Build simple desktop apps with The Canvas |
+| **Package Manager** | Manage dependencies with The Universe (WIP) |
 | **Web Framework** | Built in HTTP server and routing |
 | **Interactive REPL** | Explore and test code interactively |
 
@@ -452,5 +452,3 @@ GNU GPL V3 With Class Exception License - See [LICENSE](LICENSE) for details.
 ---
 
 **ShellLite** - Making programming accessible through natural language.
-
-Created by Shrey Naithani

@@ -1,15 +1,11 @@
 import os
 
 from ..lexer import Lexer
-from ..parser_gbp import GeometricBindingParser as Parser
+from ..parser import Parser as Parser
 from .codegen import LLVMCompiler
 
 
 def build_llvm(filename: str):
-    """
-    -----Purpose: Main entry point for the LLVM compilation pipeline. 
-    -----        Reads source, tokenizes, parses, and generates LLVM IR.
-    """
     print(f"Compiling {filename} with LLVM Backend...")
     with open(filename, 'r', encoding='utf-8') as f:
         source = f.read()
@@ -39,4 +35,4 @@ def build_llvm(filename: str):
     exe_name = os.path.splitext(filename)[0] + exe_ext
     print(f"  clang {ll_filename} -o {exe_name}")
     if _sys.platform != 'win32':
-        print(f"  chmod +x {exe_name}")
+        print(f"  chmod +x {exe_name}")

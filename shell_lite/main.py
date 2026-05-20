@@ -9,7 +9,7 @@ import traceback
 from .ast_nodes import *
 from .interpreter import Interpreter
 from .lexer import Lexer
-from .parser_gbp import GeometricBindingParser
+from .parser import Parser
 
 
 def execute_source(source: str, interpreter: Interpreter):
@@ -22,7 +22,7 @@ def execute_source(source: str, interpreter: Interpreter):
     try:
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        parser = GeometricBindingParser(tokens)
+        parser = Parser(tokens)
         statements = parser.parse()
         for stmt in statements:
             interpreter.visit(stmt)
@@ -421,7 +421,7 @@ def compile_file(filename: str, target: str = 'llvm'):
     try:
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        parser = GeometricBindingParser(tokens)
+        parser = Parser(tokens)
         statements = parser.parse()
         
         # Enforce Safe Mode for compilation
@@ -498,7 +498,7 @@ def lint_file(filename: str):
             source = f.read()
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        parser = GeometricBindingParser(tokens)
+        parser = Parser(tokens)
         parser.parse()
         print(json.dumps([]))
     except Exception as e:
@@ -517,7 +517,7 @@ def resolve_cursor(filename: str, line: int, col: int):
             source = f.read()
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        parser = GeometricBindingParser(tokens)
+        parser = Parser(tokens)
         nodes = parser.parse()
         target_token = None
         for t in tokens:

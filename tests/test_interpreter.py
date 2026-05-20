@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from shell_lite.interpreter import Interpreter
 from shell_lite.lexer import Lexer
-from shell_lite.parser_gbp import GeometricBindingParser
+from shell_lite.parser import Parser
 
 
 class TestInterpreter(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestInterpreter(unittest.TestCase):
     def run_code(self, code: str):
         lex = Lexer(code)
         tokens = lex.tokenize()
-        parser = GeometricBindingParser(tokens)
+        parser = Parser(tokens)
         ast_nodes = parser.parse()
         interpreter = Interpreter()
         last_val = None

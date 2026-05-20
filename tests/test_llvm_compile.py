@@ -11,7 +11,7 @@ try:
 
     from shell_lite.lexer import Lexer
     from shell_lite.llvm_backend.codegen import LLVMCompiler
-    from shell_lite.parser_gbp import GeometricBindingParser
+    from shell_lite.parser import Parser
 
     def test_llvm_compilation():
         """
@@ -20,7 +20,7 @@ try:
         source = 'say "Hello LLVM"'
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        parser = GeometricBindingParser(tokens)
+        parser = Parser(tokens)
         statements = parser.parse()
         compiler = LLVMCompiler()
         module = compiler.compile(statements)

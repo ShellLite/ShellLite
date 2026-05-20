@@ -1,10 +1,3 @@
-"""
-WASM build pipeline for ShellLite.
-
-Thin wrapper that transpiles AST → C (via CCompiler) and then invokes
-Emscripten (emcc) to produce a .wasm binary. Coverage is limited to the
-subset of the language supported by the C transpiler.
-"""
 import os
 import shutil
 import subprocess

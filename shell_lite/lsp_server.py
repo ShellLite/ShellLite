@@ -11,12 +11,9 @@ logger = logging.getLogger("LSP")
 
 from .ast_nodes import Assign, ClassDef, FunctionDef, Node, TypedAssign, VarAccess
 from .lexer import Lexer
-from .parser_gbp import GeometricBindingParser
+from .parser import Parser
 
 
-# ---------------------------------------------------------------------------
-# LSP Constants & Types
-# ---------------------------------------------------------------------------
 class SymbolKind:
     File = 1
     Module = 2
@@ -55,9 +52,6 @@ _KEYWORDS = [
     "bool", "list", "dict", "string", "integer", "decimal",
 ]
 
-# ---------------------------------------------------------------------------
-# Document Management
-# ---------------------------------------------------------------------------
 class ShellLiteDocument:
     def __init__(self, uri: str, text: str):
         self.uri = uri
@@ -79,7 +73,7 @@ class ShellLiteDocument:
         try:
             lexer = Lexer(self.text)
             tokens = lexer.tokenize()
-            parser = GeometricBindingParser(tokens)
+            parser = Parser(tokens)
             self.ast_nodes = parser.parse()
         except SyntaxError as e:
             line = max((getattr(e, "lineno", 1) or 1) - 1, 0)
