@@ -1,20 +1,18 @@
 # ShellLite
 
-**An English-Like Programming Language for Accessible Automation and Education**
+**An English Like Programming Language for Accessible Automation and Education**
 
-ShellLite is a high-level programming language designed to bridge the gap between natural language and executable code. It prioritizes readability and accessibility without sacrificing the power of a modern general-purpose language.
+ShellLite is a high level programming language designed to bridge the gap between natural language and executable code. It prioritizes readability and accessibility without sacrificing the power of a modern general purpose language.
 
 ## Technical Foundation
 
-ShellLite is built upon the research presented in:
-*   **Geometric Binding: A Topological Approach to Indentation Sensitive Parsing** (Zenodo: [10.5281/zenodo.18722827](https://zenodo.org/records/18722827))
-*   **ShellLite: An English Like Programming Language for Accessible Automation and Education** (Zenodo: [10.5281/zenodo.18228699](https://zenodo.org/records/18228699))
+ShellLite is built upon the research of Geometric Binding Parsing,
 
-The project implements **Geometric Binding Parsing (GBP)**, an algorithm that decouples topographic structure (indentation geometry) from code semantics, allowing for a flexible, indentation-sensitive syntax that feels natural to read and write.
+The project implements **Geometric Binding Parsing (GBP)**, an algorithm that decouples topographic structure (indentation geometry) from code semantics, allowing for a flexible, indentation sensitive syntax that feels natural to read and write.
 
 ## Key Features
 
-*   **Natural Language Syntax:** Designed to read like plain English, reducing the cognitive load for beginners and streamlining automation tasks.
+*   **Natural Language Syntax:** Designed to be read like plain English or pseudocode, reducing the cognitive load for beginners.
 *   **Python Interop:** Seamlessly import and utilize any Python module via a robust proxying layer.
 *   **Cross-Platform GUI:** Built-in engine for creating desktop applications using an intuitive widget-based syntax.
 *   **Multi-Backend Compilation:** Supports execution via a tree-walking interpreter or compilation to C, JavaScript, and WebAssembly (WASM).
