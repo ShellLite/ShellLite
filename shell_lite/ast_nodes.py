@@ -21,6 +21,12 @@ class String(Node):
     value: str
 
 @dataclass
+class Slice(Node):
+    start: Optional[Node] = None
+    stop: Optional[Node] = None
+    step: Optional[Node] = None
+
+@dataclass
 class VarAccess(Node):
     name: str
 

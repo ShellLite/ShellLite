@@ -310,6 +310,16 @@ class Interpreter:
         return getattr(inst, node.method_name)(*args)
     def visit_IndexAccess(self, node: IndexAccess):
         obj = self.visit(node.obj)
+        
+        # Handle Slicing
+        if isinstance(node.index, Slice):
+            start = self.visit(node.index.start) if node.index.start else None
+            stop = self.visit(node.index.stop) if node.index.stop else None
+            step = self.visit(node.index.step) if node.index.step else None
+            
+            return obj[slice(start, stop, step)]
+        
+        # Normal indexing
         idx = self.visit(node.index)
         return obj[idx]
     def visit_IndexAssign(self, node: IndexAssign):
