@@ -46,10 +46,12 @@ class Parser:
             'OR': 1, 'AND': 2, 'NOT': 3,
             'EQ': 4, 'NEQ': 4, 'LT': 5, 'GT': 5, 'LE': 5, 'GE': 5, 'IS': 5,
             'IN': 5, 'NOTIN': 5,
-            'PLUS': 6, 'MINUS': 6,
-            'MUL': 7, 'DIV': 7, 'MOD': 7,
-            'POW': 8,
-            'DOT': 9, 'LPAREN': 10, 'LBRACKET': 10
+            'BIT_OR': 6, 'BIT_XOR': 7, 'BIT_AND': 8,
+            'LSHIFT': 9, 'RSHIFT': 9,
+            'PLUS': 10, 'MINUS': 10,
+            'MUL': 11, 'DIV': 11, 'MOD': 11,
+            'POW': 12,
+            'DOT': 13, 'LPAREN': 14, 'LBRACKET': 14
         }
 
     def parse(self) -> List[Node]:
@@ -1156,11 +1158,11 @@ class Parser:
             if not ops:
                 return
             op_type = ops.pop()
-            unary_ops = ('NOT', 'MINUS_UNARY')
+            unary_ops = ('NOT', 'MINUS_UNARY', 'BIT_NOT')
             if op_type in unary_ops:
                 if len(values) >= 1:
                     right = values.pop()
-                    op_str = 'not' if op_type == 'NOT' else '-'
+                    op_str = 'not' if op_type == 'NOT' else ('-' if op_type == 'MINUS_UNARY' else '~')
                     values.append(UnaryOp(op_str, right))
                 else:
                     raise SyntaxError(f"Invalid expression: missing operand for unary {op_type}")
@@ -1172,7 +1174,9 @@ class Parser:
                     'MOD': '%', 'LT': '<', 'GT': '>', 'LE': '<=', 
                     'GE': '>=', 'EQ': '==', 'NEQ': '!=', 'AND': 'and', 
                     'OR': 'or', 'IS': '==', 'IN': 'in', 'NOTIN': 'not in',
-                    'DOT': '.'
+                    'DOT': '.',
+                    'POW': '**', 'BIT_AND': '&', 'BIT_OR': '|', 'BIT_XOR': '^',
+                    'LSHIFT': '<<', 'RSHIFT': '>>'
                 }
                 op_str = op_map.get(op_type, op_type)
                 values.append(BinOp(left, op_str, right))
@@ -1210,6 +1214,8 @@ class Parser:
                         'PLUS', 'MINUS', 'MUL', 'DIV',
                         'MOD', 'LT', 'GT', 'LE', 'GE',
                         'EQ', 'NEQ', 'AND', 'OR',
+                        'POW', 'BIT_AND', 'BIT_OR', 'BIT_XOR',
+                        'LSHIFT', 'RSHIFT',
                     )
                 )
                 if is_unary:
@@ -1219,6 +1225,10 @@ class Parser:
                     continue
             if t.type == 'NOT':
                 ops.append('NOT')
+                i += 1
+                continue
+            if t.type == 'BIT_NOT':
+                ops.append('BIT_NOT')
                 i += 1
                 continue
             if t.type == 'NUMBER':
@@ -1486,7 +1496,8 @@ class Parser:
                     ops.pop()
             elif t.type in self.precedence:
                 while (ops and ops[-1] != 'LPAREN' and
-                       get_precedence(ops[-1]) >= get_precedence(t.type)):
+                       (get_precedence(ops[-1]) > get_precedence(t.type) or
+                        (get_precedence(ops[-1]) == get_precedence(t.type) and t.type != 'POW'))):
                     apply_op()
                 ops.append(t.type)
             i += 1

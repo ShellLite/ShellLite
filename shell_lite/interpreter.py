@@ -361,12 +361,12 @@ class Interpreter:
                 return attr(*args, **kwargs)
             return getattr(left, node.right.name)
         right = self.visit(node.right)
-        ops = {'+': lambda a, b: a + b, '-': lambda a, b: a - b, '*': lambda a, b: a * b, '/': lambda a, b: a / b, '%': lambda a, b: a % b, '==': lambda a, b: a == b, '!=': lambda a, b: a != b, '<': lambda a, b: a < b, '>': lambda a, b: a > b, '<=': lambda a, b: a <= b, '>=': lambda a, b: a >= b, 'and': lambda a, b: a and b, 'or': lambda a, b: a or b, 'in': lambda a, b: a in b, 'not in': lambda a, b: a not in b}
+        ops = {'+': lambda a, b: a + b, '-': lambda a, b: a - b, '*': lambda a, b: a * b, '/': lambda a, b: a / b, '%': lambda a, b: a % b, '**': lambda a, b: a ** b, '&': lambda a, b: a & b, '|': lambda a, b: a | b, '^': lambda a, b: a ^ b, '<<': lambda a, b: a << b, '>>': lambda a, b: a >> b, '==': lambda a, b: a == b, '!=': lambda a, b: a != b, '<': lambda a, b: a < b, '>': lambda a, b: a > b, '<=': lambda a, b: a <= b, '>=': lambda a, b: a >= b, 'and': lambda a, b: a and b, 'or': lambda a, b: a or b, 'in': lambda a, b: a in b, 'not in': lambda a, b: a not in b}
         return ops[node.op](left, right)
 
     def visit_UnaryOp(self, node: UnaryOp):
         right = self.visit(node.right)
-        return (-right if node.op == '-' else not right)
+        return (-right if node.op == '-' else (~right if node.op == '~' else not right))
 
     def visit_If(self, node: If):
         if self.visit(node.condition): return self.visit_block(node.body)
