@@ -1,11 +1,12 @@
 """
 -----Purpose: Unit tests for the Geometric Binding Parser (GBP).
 """
+
 import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import shell_lite.ast_nodes as ast
 from shell_lite.lexer import Lexer
@@ -16,6 +17,7 @@ class TestParser(unittest.TestCase):
     """
     -----Purpose: Test suite for GBP core functionality.
     """
+
     def parse_code(self, code: str):
         lexer = Lexer(code)
         tokens = lexer.tokenize()
@@ -39,21 +41,21 @@ else
         nodes = self.parse_code(code)
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.If)
-        self.assertEqual(len(nodes[0].else_body), 1) # Contains ELIF block
-        self.assertIsInstance(nodes[0].else_body[0], ast.If) # ELIF is parsed as nested IF
-        self.assertIsNotNone(nodes[0].else_body[0].else_body) # ELSE block
-        
+        self.assertEqual(len(nodes[0].else_body), 1)  # Contains ELIF block
+        self.assertIsInstance(nodes[0].else_body[0], ast.If)  # ELIF is parsed as nested IF
+        self.assertIsNotNone(nodes[0].else_body[0].else_body)  # ELSE block
+
     def test_repeat_loop(self):
-        nodes = self.parse_code("repeat 5 times\n    say \"hello\"")
+        nodes = self.parse_code('repeat 5 times\n    say "hello"')
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.Repeat)
         self.assertEqual(len(nodes[0].body), 1)
         self.assertIsInstance(nodes[0].body[0], ast.Print)
 
     def test_function_definition(self):
-        code = '''to greet name
+        code = """to greet name
     say "Hello " + name
-    give name'''
+    give name"""
         nodes = self.parse_code(code)
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.FunctionDef)
@@ -64,10 +66,10 @@ else
         self.assertIsInstance(nodes[0].body[1], ast.Return)
 
     def test_class_definition(self):
-        code = '''thing Person
+        code = """thing Person
     has name = "Unknown"
     can say_hi
-        say self.name'''
+        say self.name"""
         nodes = self.parse_code(code)
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.ClassDef)
@@ -120,7 +122,7 @@ else
         self.assertEqual(nodes[0].value.value, "tasks.txt")
 
     def test_augmented_assignment(self):
-        nodes = self.parse_code('x += 5')
+        nodes = self.parse_code("x += 5")
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.Assign)
         self.assertEqual(nodes[0].name, "x")
@@ -132,7 +134,7 @@ else
         self.assertEqual(nodes[0].value.right.value, 5)
 
     def test_augmented_index_assignment(self):
-        nodes = self.parse_code('x[0] += 5')
+        nodes = self.parse_code("x[0] += 5")
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.IndexAssign)
         self.assertIsInstance(nodes[0].obj, ast.VarAccess)
@@ -146,6 +148,7 @@ else
         self.assertEqual(nodes[0].value.left.index.value, 0)
         self.assertIsInstance(nodes[0].value.right, ast.Number)
         self.assertEqual(nodes[0].value.right.value, 5)
+
     def test_input_tag_parsing(self):
         nodes = self.parse_code('input type="text" placeholder="Your Name"')
         self.assertEqual(len(nodes), 1)
@@ -153,7 +156,8 @@ else
         self.assertEqual(nodes[0].name, "input")
         self.assertEqual(len(nodes[0].kwargs), 2)
         self.assertEqual(nodes[0].kwargs[0][0], "type")
-        self.assertEqual(nodes[0]. kwargs[0][1].value, "text")
+        self.assertEqual(nodes[0].kwargs[0][1].value, "text")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

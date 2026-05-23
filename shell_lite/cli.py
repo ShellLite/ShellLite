@@ -1,10 +1,10 @@
-"""
-"""
+""" """
+
 import os
 import sys
 
-if getattr(sys, 'frozen', False):
-    base_dir = sys._MEIPASS
+if getattr(sys, "frozen", False):
+    base_dir = sys._MEIPASS  # type: ignore
 else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
