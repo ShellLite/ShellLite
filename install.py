@@ -10,7 +10,10 @@ def is_admin():
         return os.getuid() == 0
     except AttributeError:
         import ctypes
+
         return ctypes.windll.shell32.IsUserAnAdmin() != 0
+
+
 def add_to_path(folder_path):
     folder_path = str(folder_path)
     try:
@@ -30,14 +33,16 @@ def add_to_path(folder_path):
     except Exception as e:
         print(f"Failed to set PATH: {e}")
         return False
+
+
 def install():
     print("Installing ShellLite...")
-    appdata = os.environ.get('LOCALAPPDATA', os.path.expanduser('~\\AppData\\Local'))
+    appdata = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
     install_dir = Path(appdata) / "ShellLite"
     bin_path = install_dir / "shl.exe"
     if not install_dir.exists():
         install_dir.mkdir(parents=True)
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         base_path = sys._MEIPASS
     else:
         base_path = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +63,8 @@ def install():
     print("\nInstallation Complete!")
     print("You may need to restart your terminal for 'shl' command to work.")
     input("Press Enter to close...")
+
+
 if __name__ == "__main__":
     try:
         install()
