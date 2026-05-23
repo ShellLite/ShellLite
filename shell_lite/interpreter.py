@@ -485,6 +485,8 @@ class Interpreter:
     def visit_IndexAccess(self, node: IndexAccess):
         obj = self.visit(node.obj)
         idx = self.visit(node.index)
+        if isinstance(idx, slice):
+            return obj[idx]
         return obj[idx]
     def visit_IndexAssign(self, node: IndexAssign):
         obj = self.visit(node.obj)

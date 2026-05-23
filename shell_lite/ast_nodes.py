@@ -171,6 +171,15 @@ class ConstAssign(Node):
     name: str
     value: Node
 
+
+
+@dataclass
+class Slice(Node):
+    start: Optional[Node]
+    end: Optional[Node]
+    step: Optional[Node] = None
+
+
 @dataclass
 class IndexAccess(Node):
     obj: Node

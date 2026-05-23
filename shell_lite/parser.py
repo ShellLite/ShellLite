@@ -1296,10 +1296,32 @@ class Parser:
                     elem = elements_tokens[0]
                     start_expr = self.parse_expr_iterative(elem[:to_idx], children)
                     end_expr = self.parse_expr_iterative(elem[to_idx+1:], children)
-                    node = Call('list', [Call('range', [start_expr, end_expr])])
-                    node.line = t.line
-                    node.col = t.column
-                    values.append(node)
+                    # Check if there's a step part after second colon (x:y:z)
+                    step_expr = None
+                    if len(elem) > to_idx + 2:
+                        # Look for a third part after the end_expr tokens
+                        remaining = elem[to_idx+1:]
+                        colon_count = sum(1 for tok in remaining if tok.type == 'COLON')
+                        if colon_count >= 1:
+                            # Find the second colon
+                            second_colon_idx = None
+                            for idx2, tok in enumerate(remaining):
+                                if tok.type == 'COLON':
+                                    second_colon_idx = idx2
+                                    break
+                            if second_colon_idx is not None and second_colon_idx + 1 < len(remaining):
+                                step_expr = self.parse_expr_iterative(remaining[second_colon_idx+1:], children)
+                                end_tokens = remaining[:second_colon_idx]
+                                end_expr = self.parse_expr_iterative(end_tokens, children)
+                    from .ast_nodes import (Slice, IndexAccess)
+                    slice_node = Slice(start_expr, end_expr, step_expr)
+                    slice_node.line = t.line
+                    slice_node.col = t.column
+                    obj = values.pop() if values else None
+                    node_idx = IndexAccess(obj, slice_node)
+                    node_idx.line = t.line
+                    node_idx.col = t.column
+                    values.append(node_idx)
                     i = j + 1
                     continue
                 items = [
