@@ -5,7 +5,7 @@ from .ast_nodes import (
     Node, Number, String, VarAccess, Assign, TypedAssign, PropertyAssign,
     UnaryOp, BinOp, Print, If, While, ForIn, ListVal, Dictionary, Boolean,
     FunctionDef, Call, Return, ClassDef, Instantiation, MethodCall,
-    PropertyAccess, Import, ImportAs, Try, TryAlways, Match,
+    PropertyAccess, Import, ImportAs, Try, TryAlways, Match, Slice,
     ListComprehension, ConstAssign, IndexAccess, IndexAssign, Stop, Skip,
     Throw, PythonImport, FromImport, For, Unless, Repeat, Forever, Until,
     Convert, Download, ArchiveOp, CsvOp, ClipboardOp, AutomationOp,
@@ -1309,11 +1309,56 @@ class Parser:
                 
                 if is_indexing:
                     obj = values.pop() if values else None
-                    if items:
-                        node_idx = IndexAccess(obj, items[0])
-                        node_idx.line = t.line
-                        node_idx.col = t.column
-                        values.append(node_idx)
+                    
+                    slice_parts = []
+                    current_part = []
+
+                    has_colon = False
+                    
+                    for tok in current_elem:
+                        if tok.type == 'COLON':
+                            has_colon = True
+                            slice_parts.append(current_part)
+                            current_part = []
+                        else:
+                            current_part.append(tok)
+                    
+                    slice_parts.append(current_part)
+                    
+                    if has_colon:
+                        start = (
+                            self.parse_expr_iterative(slice_parts[0], children)
+                            if len(slice_parts) > 0 and slice_parts[0]
+                            else None
+                        )
+                        
+                        stop = (
+                            self.parse_expr_iterative(slice_parts[1], children)
+                            if len(slice_parts) > 1 and slice_parts[1]
+                            else None
+                        )
+                        
+                        step = (
+                            self.parse_expr_iterative(slice_parts[2], children)
+                            if len(slice_parts) > 2 and slice_parts[2]
+                            else None
+                        )
+                        
+                        slice_node = Slice(start, stop, step)
+                        
+                        node_idx = IndexAccess(obj, slice_node)
+                    else:
+                        idx_expr = (
+                            self.parse_expr_iterative(current_elem, children)
+                            if current_elem
+                            else None
+                        )
+                        
+                        node_idx = IndexAccess(obj, idx_expr)
+                    
+                    node_idx.line = t.line
+                    node_idx.col = t.column
+                    values.append(node_idx)
                 else:
                     node_list = ListVal(items)
                     node_list.line = t.line
