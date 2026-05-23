@@ -63,7 +63,7 @@ def run_repl():
     interpreter = Interpreter()
     print("\n" + "="*40)
     print("="*40)
-    print("Version: v0.6.1.1")
+    print("Version: v0.6.1.2")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run outside the REPL.")
     try:
@@ -192,7 +192,7 @@ def install_globally():
                     with open(rc, 'a', encoding='utf-8') as f:
                         f.write(f"\n# Added by ShellLite Installer\n{export_line}\n")
 
-        print("\n[SUCCESS] ShellLite (v0.6.0) is installed!")
+        print("\n[SUCCESS] ShellLite (v0.6.1.2) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows.")
@@ -377,10 +377,8 @@ def compile_file(filename: str, target: str = 'llvm'):
             return
 
         if target.lower() == 'js':
-            from .js_compiler import JSCompiler
-            compiler = JSCompiler()
-            code = compiler.compile(statements)
-            ext = '.js'
+            print("Notice: The JS target is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+            return
         elif target.lower() == 'llvm':
             try:
                 from .llvm_backend.builder import build_llvm
@@ -390,15 +388,11 @@ def compile_file(filename: str, target: str = 'llvm'):
                 print("Error: 'llvmlite' is required for LLVM compilation.")
                 return
         elif target.lower() == 'wasm':
-            from .wasm_builder import WASMBuilder
-            builder = WASMBuilder()
-            builder.build(statements, os.path.splitext(os.path.basename(filename))[0])
+            print("Notice: The WASM target is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
             return
         elif target.lower() == 'c':
-            from .c_compiler import CCompiler
-            compiler = CCompiler()
-            code = compiler.compile(statements)
-            ext = '.c'
+            print("Notice: The C target is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+            return
         else:
             from .compiler import Compiler
             compiler = Compiler()
@@ -519,17 +513,8 @@ def format_file(filename: str):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            source = f.read()
-        from .formatter import Formatter
-        formatter = Formatter(source)
-        formatted_code = formatter.format()
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(formatted_code)
-        print(f"[SUCCESS] Formatted {filename}")
-    except Exception as e:
-        print(f"Formatting failed: {e}")
+    print("Notice: The formatting feature is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+    return
 def self_install_check():
     """Check if ShellLite is globally installed and offer to install it if not."""
     if not shutil.which("shl"):
@@ -609,7 +594,7 @@ def main():
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "--version" or cmd == "-v":
-             print("ShellLite v0.6.0.P")
+             print("ShellLite v0.6.1.2")
         elif cmd == "get":
             if len(sys.argv) > 2:
                 package_name = sys.argv[2]

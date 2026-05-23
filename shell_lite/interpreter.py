@@ -31,14 +31,17 @@ class SkipException(Exception):
     pass
 
 class Environment:
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, instance_data: Dict[str, Any] = None):
         self.variables: Dict[str, Any] = {}
         self.constants: set = set()
         self.parent = parent
+        self.instance_data = instance_data
 
     def get(self, name: str) -> Any:
         if name in self.variables:
             return self.variables[name]
+        if self.instance_data is not None and name in self.instance_data:
+            return self.instance_data[name]
         if self.parent:
             return self.parent.get(name)
         raise NameError(f"Variable '{name}' is not defined.")
@@ -46,14 +49,31 @@ class Environment:
     def set(self, name: str, value: Any):
         if name in self.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
-        curr = self
+        
+        # 1. Local variable shadowing or already existing
+        if name in self.variables:
+            self.variables[name] = value
+            return
+            
+        # 2. Instance data property
+        if self.instance_data is not None and name in self.instance_data:
+            self.instance_data[name] = value
+            return
+
+        # 3. Parent scope (search for existing variable)
+        curr = self.parent
         while curr:
             if name in curr.variables:
                 if name in curr.constants:
                     raise RuntimeError(f"Cannot reassign constant '{name}'")
                 curr.variables[name] = value
                 return
+            if curr.instance_data is not None and name in curr.instance_data:
+                curr.instance_data[name] = value
+                return
             curr = curr.parent
+            
+        # 4. Create new local variable
         self.variables[name] = value
 
     def set_const(self, name: str, value: Any):
@@ -77,30 +97,72 @@ class PythonBridgeWrapper:
                         unwrapped_args = [a._obj if isinstance(a, PythonBridgeWrapper) else a for a in args]
                         unwrapped_kwargs = {k: (v._obj if isinstance(v, PythonBridgeWrapper) else v) for k, v in kwargs.items()}
                         result = attr(*unwrapped_args, **unwrapped_kwargs)
-                        if type(result) in (int, float, str, bool, type(None), list, dict):
+                        if type(result) in (int, float, str, bool, type(None), list, dict, bytes):
                             return result
                         return PythonBridgeWrapper(result, name=f"{self._name}.{key}()")
                     except Exception as e:
                         raise RuntimeError(f"Python interop error calling '{self._name}.{key}': {e}")
                 return wrapper
-            if type(attr) in (int, float, str, bool, type(None), list, dict):
+            if type(attr) in (int, float, str, bool, type(None), list, dict, bytes):
                 return attr
             return PythonBridgeWrapper(attr, name=f"{self._name}.{key}")
         except AttributeError:
             raise AttributeError(f"Python object '{self._name}' has no member '{key}'")
 
+    def __getitem__(self, key):
+        res = self._obj[key]
+        if type(res) in (int, float, str, bool, type(None), list, dict, bytes):
+            return res
+        return PythonBridgeWrapper(res, name=f"{self._name}[{key}]")
+
+    def __setitem__(self, key, value):
+        self._obj[key] = value
+
+    def __len__(self):
+        return len(self._obj)
+
+    def __bool__(self):
+        return bool(self._obj)
+
+    def __add__(self, other):
+        other_obj = other._obj if isinstance(other, PythonBridgeWrapper) else other
+        res = self._obj + other_obj
+        if type(res) in (int, float, str, bool, type(None), list, dict, bytes): return res
+        return PythonBridgeWrapper(res)
+
+    def __sub__(self, other):
+        other_obj = other._obj if isinstance(other, PythonBridgeWrapper) else other
+        res = self._obj - other_obj
+        if type(res) in (int, float, str, bool, type(None), list, dict, bytes): return res
+        return PythonBridgeWrapper(res)
+
+    def __mul__(self, other):
+        other_obj = other._obj if isinstance(other, PythonBridgeWrapper) else other
+        res = self._obj * other_obj
+        if type(res) in (int, float, str, bool, type(None), list, dict, bytes): return res
+        return PythonBridgeWrapper(res)
+
+    def __truediv__(self, other):
+        other_obj = other._obj if isinstance(other, PythonBridgeWrapper) else other
+        res = self._obj / other_obj
+        if type(res) in (int, float, str, bool, type(None), list, dict, bytes): return res
+        return PythonBridgeWrapper(res)
+
 class LambdaFunction:
-    def __init__(self, params: List[str], body, interpreter):
+    def __init__(self, params: List[str], body, interpreter, name: Optional[str] = None):
         self.params = params
         self.body = body
         self.interpreter = interpreter
         self.closure_env = interpreter.current_env
+        self.name = name
 
     def __call__(self, *args, **kwargs):
         old_env = self.interpreter.current_env
-        new_env = Environment(parent=self.closure_env)
+        inst = args[0] if (self.params and self.params[0] == 'self' and args and isinstance(args[0], Instance)) else None
+        new_env = Environment(parent=self.closure_env, instance_data=inst.data if inst else None)
+
         for param, arg in zip(self.params, args):
-            new_env.set(param, arg)
+            new_env.variables[param] = arg
         self.interpreter.current_env = new_env
         try:
             result = self.interpreter.visit_block(self.body)
@@ -121,12 +183,56 @@ class Instance:
     def get_method(self, name: str):
         for method in self.class_def.methods:
             if method.name == name:
-                return LambdaFunction(['self'] + [a[0] for a in method.args], method.body, self.interpreter)
+                return LambdaFunction(['self'] + [a[0] for a in method.args], method.body, self.interpreter, name=method.name)
         return None
+class JITTag:
+    def __init__(self, name, attrs=None):
+        self.name = name
+        self.attrs = attrs or {}
+        self.children = []
+    def add(self, child):
+        self.children.append(child)
+    def __str__(self):
+        attr_str = ''.join([f' {k}="{v}"' for k,v in self.attrs.items()])
+        inner = ''.join([str(c) for c in self.children])
+        if self.name in ('img', 'br', 'hr', 'input', 'meta', 'link'):
+            return f'<{self.name}{attr_str} />'
+        return f'<{self.name}{attr_str}>{inner}</{self.name}>'
+
+def make_jit_tag_fn(name, interpreter):
+    def fn(*args, **kwargs):
+        attrs = dict(kwargs)
+        content = []
+        for arg in args:
+            if isinstance(arg, dict):
+                attrs.update(arg)
+            elif isinstance(arg, LambdaFunction):
+                t = JITTag(name, attrs)
+                if interpreter.web_builder:
+                    interpreter.web_builder[-1].add(t)
+                interpreter.web_builder.append(t)
+                try:
+                    arg()
+                finally:
+                    interpreter.web_builder.pop()
+                return t
+            elif isinstance(arg, str) and '=' in arg and ' ' not in arg:
+                k, v = arg.split('=', 1)
+                attrs[k] = v
+            else:
+                content.append(arg)
+        t = JITTag(name, attrs)
+        for c in content:
+            t.add(c)
+        if interpreter.web_builder:
+            interpreter.web_builder[-1].add(t)
+        return t
+    return fn
 
 class Interpreter:
     def __init__(self):
         self.safe_mode = os.environ.get("SHL_SAFE") == "1"
+        self._thread_local = threading.local()
         self.global_env = Environment()
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
@@ -142,9 +248,46 @@ class Interpreter:
             'py_exec': exec,
             'tuple': lambda x: tuple(x),
             'getattr': getattr,
+            'add': lambda target, item: target.add(item) if isinstance(target, set) else target.append(item),
+            'remove': lambda target, item: target.remove(item),
+            'sum': sum,
+            'split': lambda x, sep=None: x.split(sep) if sep else x.split(),
+            'upper': lambda x: x.upper(),
+            'lower': lambda x: x.lower(),
+            'sort': lambda x: sorted(x),
+            'count': lambda x, y=None: x.count(y) if y is not None else len(x),
+            'xor': lambda a, b: a ^ b,
+            'empty': lambda x: len(x) == 0,
+            'ord': ord,
+            'char': chr,
+            'exists': os.path.exists,
+            'json_parse': json.loads,
+            'json_stringify': json.dumps,
+            'contains': lambda obj, item: item in obj,
+            'std_io_read': lambda path: open(path, 'r', encoding='utf-8').read(),
+            'std_io_write': lambda path, content: open(path, 'w', encoding='utf-8').write(content),
+            'std_io_append': lambda path, content: open(path, 'a', encoding='utf-8').write(content),
+            'clear_dict': lambda d: d.clear(),
         }
+        self.web_builder = []
+        for t in ['div', 'p', 'h1', 'h2', 'h3', 'h4', 'span', 'a',
+                  'img', 'button', 'input', 'form', 'ul', 'li',
+                  'html', 'head', 'body', 'title', 'meta', 'link',
+                  'script', 'style', 'br', 'hr', 'header', 'nav', 'footer',
+                  'textarea', 'strong']:
+            self.builtins[t] = make_jit_tag_fn(t, self)
         for k, v in self.builtins.items(): self.global_env.set(k, v)
         self._load_stdlib()
+
+    @property
+    def current_env(self):
+        if not hasattr(self._thread_local, 'current_env'):
+            self._thread_local.current_env = self.global_env
+        return self._thread_local.current_env
+
+    @current_env.setter
+    def current_env(self, value):
+        self._thread_local.current_env = value
 
     def _load_stdlib(self):
         stdlib_path = os.path.join(os.path.dirname(__file__), 'stdlib')
@@ -161,7 +304,15 @@ class Interpreter:
         if node is None: return None
         method_name = f'visit_{type(node).__name__}'
         visitor = getattr(self, method_name, self.generic_visit)
-        return visitor(node)
+        
+        try:
+            return visitor(node)
+        except AttributeError as e:
+            if "'Number' object has no attribute 'name'" in str(e):
+                print(f"DEBUG Error in {method_name} for node: {node}")
+            raise
+        except Exception as e:
+            raise
 
     def generic_visit(self, node: Node):
         raise Exception(f'No visit_{type(node).__name__} method')
@@ -176,7 +327,7 @@ class Interpreter:
     def visit_Boolean(self, node: Boolean): return node.value
     def visit_VarAccess(self, node: VarAccess):
         val = self.current_env.get(node.name)
-        if isinstance(val, LambdaFunction) and not val.params:
+        if isinstance(val, LambdaFunction) and len(val.params) == 0 and getattr(val, 'name', None) is not None:
             return val()
         return val
     def visit_Assign(self, node: Assign):
@@ -193,12 +344,24 @@ class Interpreter:
         left = self.visit(node.left)
         if node.op == '.':
             if isinstance(left, Instance):
-                method = left.get_method(node.right.name)
-                if method: return lambda *args, **kwargs: method(left, *args, **kwargs)
-                return left.data.get(node.right.name)
+                if isinstance(node.right, Call):
+                    method = left.get_method(node.right.name)
+                    if method:
+                        args = [self.visit(a) for a in node.right.args]
+                        kwargs = {k: self.visit(v) for k, v in node.right.kwargs} if node.right.kwargs else {}
+                        return method(left, *args, **kwargs)
+                else:
+                    method = left.get_method(node.right.name)
+                    if method: return lambda *args, **kwargs: method(left, *args, **kwargs)
+                    return left.data.get(node.right.name)
+            if isinstance(node.right, Call):
+                attr = getattr(left, node.right.name)
+                args = [self.visit(a) for a in node.right.args]
+                kwargs = {k: self.visit(v) for k, v in node.right.kwargs} if node.right.kwargs else {}
+                return attr(*args, **kwargs)
             return getattr(left, node.right.name)
         right = self.visit(node.right)
-        ops = {'+': lambda a, b: a + b, '-': lambda a, b: a - b, '*': lambda a, b: a * b, '/': lambda a, b: a / b, '%': lambda a, b: a % b, '==': lambda a, b: a == b, '!=': lambda a, b: a != b, '<': lambda a, b: a < b, '>': lambda a, b: a > b, '<=': lambda a, b: a <= b, '>=': lambda a, b: a >= b, 'and': lambda a, b: a and b, 'or': lambda a, b: a or b}
+        ops = {'+': lambda a, b: a + b, '-': lambda a, b: a - b, '*': lambda a, b: a * b, '/': lambda a, b: a / b, '%': lambda a, b: a % b, '==': lambda a, b: a == b, '!=': lambda a, b: a != b, '<': lambda a, b: a < b, '>': lambda a, b: a > b, '<=': lambda a, b: a <= b, '>=': lambda a, b: a >= b, 'and': lambda a, b: a and b, 'or': lambda a, b: a or b, 'in': lambda a, b: a in b, 'not in': lambda a, b: a not in b}
         return ops[node.op](left, right)
 
     def visit_UnaryOp(self, node: UnaryOp):
@@ -234,14 +397,14 @@ class Interpreter:
         return None
 
     def visit_FunctionDef(self, node: FunctionDef):
-        lf = LambdaFunction([a[0] for a in node.args], node.body, self)
+        lf = LambdaFunction([a[0] for a in node.args], node.body, self, name=node.name)
         self.current_env.set(node.name, lf)
         return lf
 
     def visit_Call(self, node: Call):
         func = self.current_env.get(node.name)
         args = [self.visit(a) for a in node.args]
-        if node.body: args.append(LambdaFunction([], node.body, self))
+        if node.body: args.append(LambdaFunction([], node.body, self, name=None))
         kwargs = {k: self.visit(v) for k, v in node.kwargs} if node.kwargs else {}
         return func(*args, **kwargs)
 
@@ -251,7 +414,8 @@ class Interpreter:
         print(val)
         return val
     def visit_ListVal(self, node: ListVal): return [self.visit(e) for e in node.elements]
-    def visit_Dictionary(self, node: Dictionary): return {self.visit(k): self.visit(v) for k, v in node.pairs}
+    def visit_Dictionary(self, node: Dictionary):
+        return {self.visit(k): self.visit(v) for k, v in node.pairs}
     def visit_Try(self, node: Try):
         try: return self.visit_block(node.try_body)
         except Exception as e:
@@ -285,6 +449,16 @@ class Interpreter:
 
     def visit_ClassDef(self, node: ClassDef):
         self.classes[node.name] = node
+        
+        def constructor(*args, **kwargs):
+            inst = Instance(node, self)
+            for i, arg in enumerate(args):
+                if i < len(node.properties):
+                    prop_name = node.properties[i][0]
+                    inst.data[prop_name] = arg
+            return inst
+            
+        self.current_env.set(node.name, constructor)
         return None
     def visit_Instantiation(self, node: Instantiation):
         cls = self.classes[node.class_name]
@@ -328,7 +502,23 @@ class Interpreter:
         val = self.visit(node.value)
         obj[idx] = val
         return val
-    def visit_Spawn(self, node: Spawn): return self._shared_executor.submit(self.visit, node.call)
+    def visit_Spawn(self, node: Spawn):
+        if not isinstance(node.call, Call):
+            raise Exception("Spawn requires a function call")
+        func = self.current_env.get(node.call.name)
+        args = [self.visit(a) for a in node.call.args]
+        if node.call.body:
+            args.append(LambdaFunction([], node.call.body, self, name=None))
+        kwargs = {k: self.visit(v) for k, v in node.call.kwargs} if node.call.kwargs else {}
+        
+        def run_threaded():
+            try:
+                func(*args, **kwargs)
+            except Exception as e:
+                import traceback
+                print(f"[Spawn Thread Error]: {e}")
+                traceback.print_exc()
+        return self._shared_executor.submit(run_threaded)
     def visit_Await(self, node: Await):
         f = self.visit(node.task)
         return f.result() if hasattr(f, 'result') else f
@@ -337,3 +527,15 @@ class Interpreter:
         for ce, b in node.cases:
             if v == self.visit(ce): return self.visit_block(b)
         return self.visit_block(node.default_case) if node.default_case else None
+
+    def visit_FileRead(self, node: FileRead):
+        path = self.visit(node.path)
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def visit_FileWrite(self, node: FileWrite):
+        path = self.visit(node.path)
+        content = self.visit(node.content)
+        with open(path, node.mode, encoding='utf-8') as f:
+            f.write(content)
+        return None

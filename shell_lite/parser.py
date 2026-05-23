@@ -1,31 +1,33 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
-from .ast_nodes import *
+from .ast_nodes import (
+    Node, Number, String, VarAccess, Assign, TypedAssign, PropertyAssign,
+    UnaryOp, BinOp, Print, If, While, ForIn, ListVal, Dictionary, Boolean,
+    FunctionDef, Call, Return, ClassDef, Instantiation, MethodCall,
+    PropertyAccess, Import, ImportAs, Try, TryAlways, Match,
+    ListComprehension, ConstAssign, IndexAccess, IndexAssign, Stop, Skip,
+    Throw, PythonImport, FromImport, For, Unless, Repeat, Forever, Until,
+    Convert, Download, ArchiveOp, CsvOp, ClipboardOp, AutomationOp,
+    FileWrite, FileRead, DatabaseOp, Every, After, Exit, Spawn, Await,
+    Parallel, Gather, Lock, Channel, Send, Receive, Assertion, TestBlock,
+    Layout, Widget, OnRequest, Listen, MaxNode, MinNode, ClampNode, LerpNode
+)
 from .lexer import Token
-
 
 @dataclass
 class GeoNode:
-    line_num: int = 0
+    line: int = 0
     indent_level: int = 0
     raw_text: str = ""
     head_token: Optional[Token] = None
     tokens: List[Token] = field(default_factory=list)
     children: List['GeoNode'] = field(default_factory=list)
     parent: Optional['GeoNode'] = None
-    line: int = 0
-
-    def __post_init__(self):
-        if self.line > 0 and self.line_num == 0:
-            self.line_num = self.line
-        elif self.line_num > 0 and self.line == 0:
-            self.line = self.line_num
 
     def __repr__(self):
         head_type = self.head_token.type if self.head_token else 'None'
-        return f"GeoNode(line={self.line_num}, indent={self.indent_level}, head={head_type})"
-
+        return f"GeoNode(line={self.line}, indent={self.indent_level}, head={head_type})"
 
 class Parser:
     def __init__(self, source_or_tokens: Any = None, tokens: List[Token] = None):
@@ -53,7 +55,7 @@ class Parser:
     def parse(self) -> List[Node]:
         if self.legacy_tokens is not None and self.source_code is None:
             self.tokens = [t for t in self.legacy_tokens if t.type != 'COMMENT']
-            self.topology_scan_legacy()
+            self.topology_scan()
             return self.bind_statement_list(self.root_nodes)
             
         flat_nodes = self.phase1_topography_scan(self.source_code)
@@ -65,7 +67,7 @@ class Parser:
         from .lexer import Lexer
         for node in flat_nodes:
             lexer = Lexer(node.raw_text)
-            lexer.line_number = node.line_num
+            lexer.line_number = node.line
             node.tokens = lexer.tokenize_line_only()
             for t in node.tokens:
                 if t.type != 'NOISE':
@@ -85,7 +87,7 @@ class Parser:
                 continue
             indent_level = len(line) - len(line.lstrip())
             nodes.append(GeoNode(
-                line_num=i + 1,
+                line=i + 1,
                 indent_level=indent_level,
                 raw_text=line
             ))
@@ -104,7 +106,7 @@ class Parser:
             stack.append(node)
         return root.children
 
-    def topology_scan_legacy(self):
+    def topology_scan(self):
         current_node: Optional[GeoNode] = None
         last_line_node: Optional[GeoNode] = None
         block_stack: List[GeoNode] = []
@@ -127,7 +129,7 @@ class Parser:
                 continue
             if current_node is None:
                 current_node = GeoNode(
-                    line_num=token.line,
+                    line=token.line,
                     indent_level=len(block_stack),
                     raw_text="",
                     head_token=token,
@@ -223,43 +225,6 @@ class Parser:
             i += 1
         return ast_nodes
 
-    def topology_scan(self):
-        current_node: Optional[GeoNode] = None
-        last_line_node: Optional[GeoNode] = None
-        block_stack: List[GeoNode] = []
-        for token in self.tokens:
-            if token.type == 'EOF':
-                break
-            if token.type == 'INDENT':
-                p_push = current_node if current_node else last_line_node
-                if p_push:
-                    block_stack.append(p_push)
-                current_node = None
-                continue
-            if token.type == 'DEDENT':
-                if block_stack:
-                    block_stack.pop()
-                continue
-            if token.type == 'NEWLINE':
-                last_line_node = current_node
-                current_node = None
-                continue
-            if current_node is None:
-                current_node = GeoNode(
-                    head_token=token,
-                    line=token.line,
-                    indent_level=len(block_stack),
-                    tokens=[token]
-                )
-                if block_stack:
-                    parent = block_stack[-1]
-                    parent.children.append(current_node)
-                    current_node.parent = parent
-                else:
-                    self.root_nodes.append(current_node)
-            else:
-                current_node.tokens.append(token)
-    
     def _set_node_loc(self, ast_node: Node, geo_node: GeoNode):
         """Helper to set location on an AST node from a GeoNode."""
         if not ast_node or not isinstance(ast_node, Node):
@@ -269,7 +234,7 @@ class Parser:
         # Determine end line/col from children or tokens
         if geo_node.children:
             last_child = geo_node.children[-1]
-            ast_node.end_line = last_child.line # Simplified, better logic would be recursive
+            ast_node.end_line = last_child.line
             ast_node.end_col = 999 
         elif geo_node.tokens:
             last_tok = geo_node.tokens[-1]
@@ -623,6 +588,7 @@ class Parser:
         if node.children:
             for child in node.children:
                 expr_tokens.extend(child.tokens)
+        # print(f"DEBUG bind_assignment: expr_tokens={[t.value for t in expr_tokens]}")
         value = self.parse_expr_iterative(expr_tokens, node.children)
         
         op_tok = tokens[assign_idx]
@@ -784,8 +750,9 @@ class Parser:
                 continue
             if t.type == 'COLON':
                 break
-            if t.type == 'ID':
+            if t.type in ('ID', 'FOLDER', 'FILE', 'PORT', 'SERVER', 'NAME', 'TYPE', 'VALUE', 'CONTENT'):
                 arg_name = t.value
+                # print(f"DEBUG bind_func: capturing arg {arg_name}")
                 # Check for `arg as type` pattern
                 if (i + 2 < len(token_slice)
                         and token_slice[i + 1].type == 'AS'
@@ -1054,7 +1021,7 @@ class Parser:
         if i < len(tokens) and tokens[i].type == 'USING':
             i += 1
             while i < len(tokens):
-                if tokens[i].type == 'ID':
+                if tokens[i].type in ('ID', 'FOLDER', 'FILE'):
                     args.append((tokens[i].value, None, None))
                 elif tokens[i].type == 'COMMA':
                     pass
@@ -1227,65 +1194,14 @@ class Parser:
             if t.type == 'NOISE':
                 i += 1
                 continue
-            if t.type == 'ID' and t.value.lower() == 'a' and i + 1 < len(tokens) and tokens[i + 1].type == 'LIST':
-                if i + 2 < len(tokens) and tokens[i + 2].type == 'OF':
-                    j = i + 3
-                    elements_tokens = []
-                    current_elem = []
-                    while j < len(tokens):
-                        if tokens[j].type == 'COMMA':
-                            if current_elem:
-                                elements_tokens.append(current_elem)
-                                current_elem = []
-                        else:
-                            current_elem.append(tokens[j])
-                        j += 1
-                    if current_elem:
-                        elements_tokens.append(current_elem)
-                    
-                    items = [
-                        self.parse_expr_iterative(elem)
-                        for elem in elements_tokens if elem
-                    ]
-                    values.append(ListVal(items))
-                    i = j
-                    continue
-                else:
-                    values.append(ListVal([]))
-                    i += 2
-                    continue
 
-            if t.type == 'ID' and t.value.lower() == 'a' and i + 2 < len(tokens) and tokens[i + 1].type == 'UNIQUE' and tokens[i + 2].type == 'SET':
-                if i + 3 < len(tokens) and tokens[i + 3].type == 'OF':
-                    j = i + 4
-                    elements_tokens = []
-                    current_elem = []
-                    while j < len(tokens):
-                        if tokens[j].type == 'COMMA':
-                            if current_elem:
-                                elements_tokens.append(current_elem)
-                                current_elem = []
-                        else:
-                            current_elem.append(tokens[j])
-                        j += 1
-                    if current_elem:
-                        elements_tokens.append(current_elem)
-                    
-                    items = [
-                        self.parse_expr_iterative(elem)
-                        for elem in elements_tokens if elem
-                    ]
-                    values.append(Call('set', [ListVal(items)]))
-                    i = j
-                    continue
-                else:
-                    values.append(Call('set', [ListVal([])]))
-                    i += 3
-                    continue
-            if t.type == 'ID' and t.value.lower() == 'a' and i + 1 < len(tokens) and tokens[i + 1].type == 'ID' and tokens[i + 1].value.lower() == 'dictionary':
-                values.append(Dictionary([]))
-                i += 2
+            # Match natural list, unique set, and dictionary builders
+            new_idx, natural_node = self._parse_natural_list_or_set_or_dict(tokens, i)
+            if natural_node is not None:
+                values.append(natural_node)
+                i = new_idx
                 continue
+
             if t.type == 'MINUS':
                 is_unary = (
                     i == 0 or
@@ -1334,7 +1250,6 @@ class Parser:
                     is_indexing = True
                 
                 if is_indexing:
-                    # Apply higher or equal precedence operators before indexing (e.g., DOT)
                     while ops and ops[-1] != 'LPAREN' and get_precedence(ops[-1]) >= 30:
                         apply_op()
                     
@@ -1362,6 +1277,20 @@ class Parser:
                             to_idx = len(current_elem)
                         current_elem.append(tokens[j])
                     j += 1
+                
+                if depth > 0 and current_elem:
+                    last_split = []
+                    last_curr = []
+                    for t_last in current_elem:
+                        if t_last.type == 'COMMA':
+                            if last_curr:
+                                last_split.append(last_curr)
+                                last_curr = []
+                        else:
+                            last_curr.append(t_last)
+                    if last_curr:
+                        last_split.append(last_curr)
+                    elements_tokens.extend(last_split)
                 
                 if not has_comma and to_idx != -1 and len(elements_tokens) == 1:
                     elem = elements_tokens[0]
@@ -1412,6 +1341,7 @@ class Parser:
                         paren_depth += 1
                     elif tokens[j].type == 'RPAREN':
                         paren_depth -= 1
+                    
                     if depth == 0:
                         if current_pair:
                             pairs_tokens.append(current_pair)
@@ -1422,6 +1352,9 @@ class Parser:
                     else:
                         current_pair.append(tokens[j])
                     j += 1
+                
+                if depth > 0 and current_pair:
+                    pairs_tokens.append(current_pair)
                 
                 pairs = []
                 for p_tokens in pairs_tokens:
@@ -1439,280 +1372,66 @@ class Parser:
                 
                 values.append(Dictionary(pairs))
                 i = j
-            elif t.type == 'LIST' and i + 1 < len(tokens) and tokens[i + 1].type == 'OF':
-                j = i + 2
-                elements_tokens = []
-                current_elem = []
-                while j < len(tokens):
-                    if tokens[j].type == 'COMMA':
-                        if current_elem:
-                            elements_tokens.append(current_elem)
-                            current_elem = []
-                    else:
-                        current_elem.append(tokens[j])
-                    j += 1
-                if current_elem:
-                    elements_tokens.append(current_elem)
-                
-                items = [
-                    self.parse_expr_iterative(elem)
-                    for elem in elements_tokens if elem
-                ]
-                values.append(ListVal(items))
-                i = j
-                continue
-            elif t.type == 'UNIQUE' and i + 2 < len(tokens) and tokens[i + 1].type == 'SET' and tokens[i + 2].type == 'OF':
-                # Natural set: [a] unique set of item1, item2...
-                j = i + 3
-                elements_tokens = []
-                current_elem = []
-                while j < len(tokens):
-                    if tokens[j].type == 'COMMA':
-                        if current_elem:
-                            elements_tokens.append(current_elem)
-                            current_elem = []
-                    else:
-                        current_elem.append(tokens[j])
-                    j += 1
-                if current_elem:
-                    elements_tokens.append(current_elem)
-                
-                items = [
-                    self.parse_expr_iterative(elem, [])
-                    for elem in elements_tokens if elem
-                ]
-                values.append(Call('set', [ListVal(items)]))
-                i = j
-                continue
             elif t.type == 'ASK' and i + 1 < len(tokens) and tokens[i + 1].type == 'STRING':
-                # Natural ask: ask "Question"
                 values.append(Call('ask', [String(tokens[i + 1].value)]))
                 i += 2
                 continue
             elif t.type == 'GATHER':
                 i += 1
-                inner_tokens = tokens[i:]
-                expr_node = self.parse_expr_iterative(inner_tokens)
-                values.append(Gather(expr_node))
+                values.append(Gather(self.parse_expr_iterative(tokens[i:])))
                 break 
             elif t.type == 'RECEIVE':
                 i += 1
-                inner_tokens = tokens[i:]
-                expr_node = self.parse_expr_iterative(inner_tokens)
-                values.append(Receive(expr_node))
+                values.append(Receive(self.parse_expr_iterative(tokens[i:])))
                 break
             elif t.type == 'CHANNEL':
                 values.append(Channel())
                 i += 1
                 continue
             elif t.type in ('MAX', 'MIN'):
-                node_class = MaxNode if t.type == 'MAX' else MinNode
-                i += 1
-                if i < len(tokens) and tokens[i].type == 'OF':
-                    i += 1
-                and_idx = -1
-                depth = 0
-                for k in range(i, len(tokens)):
-                    tt = tokens[k].type
-                    if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
-                    elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
-                    elif tt == 'AND' and depth == 0:
-                        and_idx = k
-                        break
-                
-                if and_idx != -1:
-                    left_tokens = tokens[i:and_idx]
-                    right_tokens = tokens[and_idx+1:]
-                    left_expr = self.parse_expr_iterative(left_tokens)
-                    right_expr = self.parse_expr_iterative(right_tokens)
-                    values.append(node_class(left_expr, right_expr))
-                    break
-                else:
-                    inner_tokens = tokens[i:]
-                    expr_node = self.parse_expr_iterative(inner_tokens)
-                    values.append(node_class(expr_node, None))
-                    break
+                values.append(self._parse_min_max(tokens, i, t.type))
+                break
             elif t.type == 'CLAMPED':
-                i += 1
-                bet_idx = -1
-                and_idx = -1
-                depth = 0
-                for k in range(i, len(tokens)):
-                    tt = tokens[k].type
-                    if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
-                    elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
-                    elif depth == 0:
-                        if tt == 'BETWEEN': bet_idx = k
-                        elif tt == 'AND' and bet_idx != -1:
-                            and_idx = k
-                            break
-                if bet_idx != -1 and and_idx != -1:
-                    val_expr = self.parse_expr_iterative(tokens[i:bet_idx])
-                    min_expr = self.parse_expr_iterative(tokens[bet_idx+1:and_idx])
-                    max_expr = self.parse_expr_iterative(tokens[and_idx+1:])
-                    values.append(ClampNode(val_expr, min_expr, max_expr))
-                    break
-                else:
-                    raise SyntaxError(f"Malformed 'clamped' expression at line {t.line}")
+                values.append(self._parse_clamped(tokens, i))
+                break
             elif t.type == 'LERP':
-                i += 1
-                from_idx = -1
-                to_idx = -1
-                by_idx = -1
-                depth = 0
-                for k in range(i, len(tokens)):
-                    tt = tokens[k].type
-                    if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
-                    elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
-                    elif depth == 0:
-                        if tt == 'FROM': from_idx = k
-                        elif tt == 'TO': to_idx = k
-                        elif tt == 'BY': by_idx = k
-                if from_idx != -1 and to_idx != -1 and by_idx != -1:
-                    a_expr = self.parse_expr_iterative(tokens[from_idx+1:to_idx])
-                    b_expr = self.parse_expr_iterative(tokens[to_idx+1:by_idx])
-                    t_expr = self.parse_expr_iterative(tokens[by_idx+1:])
-                    values.append(LerpNode(a_expr, b_expr, t_expr))
-                    break
-                else:
-                    to_idx = -1
-                    by_idx = -1
-                    for k in range(i, len(tokens)):
-                        tt = tokens[k].type
-                        if tt == 'TO': to_idx = k
-                        elif tt == 'BY': by_idx = k
-                    if to_idx != -1 and by_idx != -1:
-                        a_expr = self.parse_expr_iterative(tokens[i:to_idx])
-                        b_expr = self.parse_expr_iterative(tokens[to_idx+1:by_idx])
-                        t_expr = self.parse_expr_iterative(tokens[by_idx+1:])
-                        values.append(LerpNode(a_expr, b_expr, t_expr))
-                        break
-                    raise SyntaxError(f"Malformed 'lerp' expression at line {t.line}")
+                values.append(self._parse_lerp(tokens, i))
+                break
             elif t.type == 'FIND':
                 tmp_node = GeoNode(head_token=t, line=t.line, indent_level=0, tokens=tokens[i:], children=[])
-                res = self.bind_find_records(tmp_node)
-                values.append(res)
+                values.append(self.bind_find_records(tmp_node))
                 break
             elif t.type == 'PARALLEL':
                 if children:
-                    body = self.bind_statement_list(children)
-                    values.append(Parallel(body))
+                    values.append(Parallel(self.bind_statement_list(children)))
                 else:
                     values.append(Parallel([]))
                 break
             elif t.type == 'ID' and t.value.lower() == 'sum' and i + 1 < len(tokens) and tokens[i+1].type == 'OF':
-                i += 2
-                inner_expr = self.parse_expr_iterative(tokens[i:], children)
-                values.append(Call('sum', [inner_expr]))
+                values.append(Call('sum', [self.parse_expr_iterative(tokens[i+2:], children)]))
                 break
             elif t.type == 'ID' and i + 1 < len(tokens) and tokens[i+1].type == 'FROM':
-                var_name = t.value
-                from_idx = i + 1
-                to_idx = -1
-                when_idx = -1
-                for k in range(from_idx, len(tokens)):
-                    if tokens[k].type == 'TO': to_idx = k
-                    elif tokens[k].type in ('WHEN', 'THAT') or (tokens[k].type == 'ID' and tokens[k].value.lower() == 'that'): 
-                        when_idx = k
-                        break
-                
-                if to_idx != -1:
-                    start_expr = self.parse_expr_iterative(tokens[from_idx+1:to_idx], children)
-                    end_expr_tokens = tokens[to_idx+1:when_idx] if when_idx != -1 else tokens[to_idx+1:]
-                    end_expr = self.parse_expr_iterative(end_expr_tokens, children)
-                    iterable = Call('range', [start_expr, end_expr])
-                    
-                    condition = None
-                    if when_idx != -1:
-                        cond_start = when_idx + 1
-                        if cond_start < len(tokens) and tokens[cond_start].type == 'ID' and tokens[cond_start].value.lower() == 'are':
-                            cond_start += 1
-                        condition = self.parse_expr_iterative(tokens[cond_start:], children)
-                    values.append(ListComprehension(VarAccess(var_name), var_name, iterable, condition))
-                    break
+                values.append(self._parse_comprehension(tokens, i, t, children))
+                break
             elif ((t.type == 'ID' and t.value.lower() in ('split', 'len', 'length', 'count')) or t.type in ('UPPER', 'LOWER')) and (i + 1 >= len(tokens) or tokens[i+1].type != 'LPAREN'):
-                func_name = t.value.lower()
-                i += 1
-                only_letters = False
-                only_idx = -1
-                for k in range(i, len(tokens)):
-                    if tokens[k].type == 'ID' and tokens[k].value.lower() == 'only' and k + 1 < len(tokens) and tokens[k+1].type == 'ID' and tokens[k+1].value.lower() == 'letters':
-                        only_idx = k
-                        only_letters = True
-                        break
-                        
-                expr_tokens = tokens[i:only_idx] if only_idx != -1 else tokens[i:]
-                expr = self.parse_expr_iterative(expr_tokens, children)
-                
-                args = [expr]
-                kwargs = []
-                if only_letters:
-                    kwargs.append(('only', String('letters')))
-                    
-                values.append(Call(func_name, args, kwargs=kwargs))
+                values.append(self._parse_unparenthesized_fn(tokens, i, t, children))
                 break
             elif t.type == 'READ' and (i + 1 >= len(tokens) or tokens[i+1].type != 'LPAREN'):
-                i += 1
-                expr = self.parse_expr_iterative(tokens[i:], children)
-                values.append(FileRead(expr))
+                values.append(FileRead(self.parse_expr_iterative(tokens[i+1:], children)))
                 break
             elif t.type in (
-                'ID', 'ADD', 'REMOVE', 
+                'ID', 'ADD', 'REMOVE', 'FOLDER', 'FILE',
                 'CONVERT', 'LOAD', 'SAVE',
                 'SET', 'LIST', 'SIZE', 'INT', 'STR', 'LEN', 'KEYS',
                 'UPPER', 'LOWER', 'SORT',
                 'CONTAINS', 'EMPTY', 'JSON', 'HTTP',
                 'BUTTON', 'HEADING', 'PARAGRAPH', 'IMAGE', 'START', 'SERVER',
                 'READ', 'WRITE', 'OPEN', 'CLOSE', 'UPDATE', 'DELETE', 'FIND', 'CREATE', 'COUNT', 'INSERT',
-                'ERROR', 'EXECUTE', 'COPY'
+                'ERROR', 'EXECUTE', 'COPY', 'LISTEN', 'PORT', 'NAME', 'TYPE', 'VALUE', 'CONTENT'
             ):
-                if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
-                    name = t.value
-                    depth = 1
-                    j = i + 2
-                    elements_tokens = []
-                    current_elem = []
-                    if j < len(tokens) and tokens[j].type == 'RPAREN':
-                        i = j
-                        values.append(Call(name, []))
-                    else:
-                        while j < len(tokens):
-                            t_type = tokens[j].type
-                            if t_type in ('LPAREN', 'LBRACKET', 'LBRACE'):
-                                depth += 1
-                            elif t_type in ('RPAREN', 'RBRACKET', 'RBRACE'):
-                                depth -= 1
-                            
-                            if depth == 0:
-                                if current_elem:
-                                    elements_tokens.append(current_elem)
-                                break
-                            if t_type == 'COMMA' and depth == 1:
-                                elements_tokens.append(current_elem)
-                                current_elem = []
-                            else:
-                                current_elem.append(tokens[j])
-                            j += 1
-                        args = []
-                        kwargs = []
-                        for elem in elements_tokens:
-                            if not elem: continue
-                            is_kw = (len(elem) >= 2 and elem[0].type == 'ID' and elem[1].type == 'ASSIGN')
-                            if is_kw:
-                                key = elem[0].value
-                                val = self.parse_expr_iterative(elem[2:], [])
-                                kwargs.append((key, val))
-                            else:
-                                args.append(self.parse_expr_iterative(elem, []))
-                        values.append(Call(name, args, kwargs=kwargs))
-                        i = j
-                else:
-                    val = VarAccess(t.value)
-                    val.line = t.line
-                    val.col = t.column
-                    val.end_line = t.line
-                    val.end_col = t.column + len(t.value)
-                    values.append(val)
+                new_idx, node_val = self._parse_id_or_call(tokens, i, t)
+                values.append(node_val)
+                i = new_idx
             elif t.type == 'LPAREN':
                 ops.append('LPAREN')
             elif t.type == 'RPAREN':
@@ -1731,3 +1450,280 @@ class Parser:
         if len(values) > 1:
             raise SyntaxError(f"Invalid expression: too many operands. Tokens: {tokens}, Values: {values}")
         return values[0] if values else None
+
+    def _parse_natural_list_or_set_or_dict(self, tokens: List[Token], i: int) -> tuple[int, Optional[Node]]:
+        t = tokens[i]
+        # Match "a list of ..." or "a list"
+        if t.type == 'ID' and t.value.lower() == 'a' and i + 1 < len(tokens) and tokens[i + 1].type == 'LIST':
+            if i + 2 < len(tokens) and tokens[i + 2].type == 'OF':
+                j = i + 3
+                elements_tokens = []
+                current_elem = []
+                while j < len(tokens):
+                    if tokens[j].type == 'COMMA':
+                        if current_elem:
+                            elements_tokens.append(current_elem)
+                            current_elem = []
+                    else:
+                        current_elem.append(tokens[j])
+                    j += 1
+                if current_elem:
+                    elements_tokens.append(current_elem)
+                
+                items = [
+                    self.parse_expr_iterative(elem)
+                    for elem in elements_tokens if elem
+                ]
+                return j, ListVal(items)
+            else:
+                return i + 2, ListVal([])
+
+        # Match "a unique set of ..." or "a unique set"
+        if t.type == 'ID' and t.value.lower() == 'a' and i + 2 < len(tokens) and tokens[i + 1].type == 'UNIQUE' and tokens[i + 2].type == 'SET':
+            if i + 3 < len(tokens) and tokens[i + 3].type == 'OF':
+                j = i + 4
+                elements_tokens = []
+                current_elem = []
+                while j < len(tokens):
+                    if tokens[j].type == 'COMMA':
+                        if current_elem:
+                            elements_tokens.append(current_elem)
+                            current_elem = []
+                    else:
+                        current_elem.append(tokens[j])
+                    j += 1
+                if current_elem:
+                    elements_tokens.append(current_elem)
+                
+                items = [
+                    self.parse_expr_iterative(elem)
+                    for elem in elements_tokens if elem
+                ]
+                return j, Call('set', [ListVal(items)])
+            else:
+                return i + 3, Call('set', [ListVal([])])
+
+        # Match "a dictionary"
+        if t.type == 'ID' and t.value.lower() == 'a' and i + 1 < len(tokens) and tokens[i + 1].type == 'ID' and tokens[i + 1].value.lower() == 'dictionary':
+            return i + 2, Dictionary([])
+
+        # Match "list of ..."
+        if t.type == 'LIST' and i + 1 < len(tokens) and tokens[i + 1].type == 'OF':
+            j = i + 2
+            elements_tokens = []
+            current_elem = []
+            while j < len(tokens):
+                if tokens[j].type == 'COMMA':
+                    if current_elem:
+                        elements_tokens.append(current_elem)
+                        current_elem = []
+                else:
+                    current_elem.append(tokens[j])
+                j += 1
+            if current_elem:
+                elements_tokens.append(current_elem)
+            
+            items = [
+                self.parse_expr_iterative(elem)
+                for elem in elements_tokens if elem
+            ]
+            return j, ListVal(items)
+
+        # Match "unique set of ..."
+        if t.type == 'UNIQUE' and i + 2 < len(tokens) and tokens[i + 1].type == 'SET' and tokens[i + 2].type == 'OF':
+            j = i + 3
+            elements_tokens = []
+            current_elem = []
+            while j < len(tokens):
+                if tokens[j].type == 'COMMA':
+                    if current_elem:
+                        elements_tokens.append(current_elem)
+                        current_elem = []
+                else:
+                    current_elem.append(tokens[j])
+                j += 1
+            if current_elem:
+                elements_tokens.append(current_elem)
+            
+            items = [
+                self.parse_expr_iterative(elem, [])
+                for elem in elements_tokens if elem
+            ]
+            return j, Call('set', [ListVal(items)])
+
+        return i, None
+
+    def _parse_clamped(self, tokens: List[Token], i: int) -> ClampNode:
+        i += 1
+        bet_idx = -1
+        and_idx = -1
+        depth = 0
+        for k in range(i, len(tokens)):
+            tt = tokens[k].type
+            if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
+            elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
+            elif depth == 0:
+                if tt == 'BETWEEN': bet_idx = k
+                elif tt == 'AND' and bet_idx != -1:
+                    and_idx = k
+                    break
+        if bet_idx != -1 and and_idx != -1:
+            val_expr = self.parse_expr_iterative(tokens[i:bet_idx])
+            min_expr = self.parse_expr_iterative(tokens[bet_idx+1:and_idx])
+            max_expr = self.parse_expr_iterative(tokens[and_idx+1:])
+            return ClampNode(val_expr, min_expr, max_expr)
+        else:
+            raise SyntaxError(f"Malformed 'clamped' expression at line {tokens[i-1].line}")
+
+    def _parse_lerp(self, tokens: List[Token], i: int) -> LerpNode:
+        i += 1
+        from_idx = -1
+        to_idx = -1
+        by_idx = -1
+        depth = 0
+        for k in range(i, len(tokens)):
+            tt = tokens[k].type
+            if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
+            elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
+            elif depth == 0:
+                if tt == 'FROM': from_idx = k
+                elif tt == 'TO': to_idx = k
+                elif tt == 'BY': by_idx = k
+        if from_idx != -1 and to_idx != -1 and by_idx != -1:
+            a_expr = self.parse_expr_iterative(tokens[from_idx+1:to_idx])
+            b_expr = self.parse_expr_iterative(tokens[to_idx+1:by_idx])
+            t_expr = self.parse_expr_iterative(tokens[by_idx+1:])
+            return LerpNode(a_expr, b_expr, t_expr)
+        else:
+            to_idx = -1
+            by_idx = -1
+            for k in range(i, len(tokens)):
+                tt = tokens[k].type
+                if tt == 'TO': to_idx = k
+                elif tt == 'BY': by_idx = k
+            if to_idx != -1 and by_idx != -1:
+                a_expr = self.parse_expr_iterative(tokens[i:to_idx])
+                b_expr = self.parse_expr_iterative(tokens[to_idx+1:by_idx])
+                t_expr = self.parse_expr_iterative(tokens[by_idx+1:])
+                return LerpNode(a_expr, b_expr, t_expr)
+            raise SyntaxError(f"Malformed 'lerp' expression at line {tokens[i-1].line}")
+
+    def _parse_min_max(self, tokens: List[Token], i: int, t_type: str) -> MaxNode | MinNode:
+        node_class = MaxNode if t_type == 'MAX' else MinNode
+        i += 1
+        if i < len(tokens) and tokens[i].type == 'OF':
+            i += 1
+        and_idx = -1
+        depth = 0
+        for k in range(i, len(tokens)):
+            tt = tokens[k].type
+            if tt in ('LPAREN', 'LBRACKET', 'LBRACE'): depth += 1
+            elif tt in ('RPAREN', 'RBRACKET', 'RBRACE'): depth -= 1
+            elif tt == 'AND' and depth == 0:
+                and_idx = k
+                break
+        
+        if and_idx != -1:
+            left_tokens = tokens[i:and_idx]
+            right_tokens = tokens[and_idx+1:]
+            left_expr = self.parse_expr_iterative(left_tokens)
+            right_expr = self.parse_expr_iterative(right_tokens)
+            return node_class(left_expr, right_expr)
+        else:
+            inner_tokens = tokens[i:]
+            expr_node = self.parse_expr_iterative(inner_tokens)
+            return node_class(expr_node, None)
+
+    def _parse_comprehension(self, tokens: List[Token], i: int, t: Token, children: List[GeoNode]) -> ListComprehension:
+        var_name = t.value
+        from_idx = i + 1
+        to_idx = -1
+        when_idx = -1
+        for k in range(from_idx, len(tokens)):
+            if tokens[k].type == 'TO': to_idx = k
+            elif tokens[k].type in ('WHEN', 'THAT') or (tokens[k].type == 'ID' and tokens[k].value.lower() == 'that'): 
+                when_idx = k
+                break
+        
+        if to_idx != -1:
+            start_expr = self.parse_expr_iterative(tokens[from_idx+1:to_idx], children)
+            end_expr_tokens = tokens[to_idx+1:when_idx] if when_idx != -1 else tokens[to_idx+1:]
+            end_expr = self.parse_expr_iterative(end_expr_tokens, children)
+            iterable = Call('range', [start_expr, end_expr])
+            
+            condition = None
+            if when_idx != -1:
+                cond_start = when_idx + 1
+                if cond_start < len(tokens) and tokens[cond_start].type == 'ID' and tokens[cond_start].value.lower() == 'are':
+                    cond_start += 1
+                condition = self.parse_expr_iterative(tokens[cond_start:], children)
+            return ListComprehension(VarAccess(var_name), var_name, iterable, condition)
+        raise SyntaxError(f"Malformed list comprehension at line {t.line}")
+
+    def _parse_unparenthesized_fn(self, tokens: List[Token], i: int, t: Token, children: List[GeoNode]) -> Call:
+        func_name = t.value.lower()
+        i += 1
+        only_letters = False
+        only_idx = -1
+        for k in range(i, len(tokens)):
+            if tokens[k].type == 'ID' and tokens[k].value.lower() == 'only' and k + 1 < len(tokens) and tokens[k+1].type == 'ID' and tokens[k+1].value.lower() == 'letters':
+                only_idx = k
+                only_letters = True
+                break
+                
+        expr_tokens = tokens[i:only_idx] if only_idx != -1 else tokens[i:]
+        expr = self.parse_expr_iterative(expr_tokens, children)
+        
+        args = [expr]
+        kwargs = []
+        if only_letters:
+            kwargs.append(('only', String('letters')))
+            
+        return Call(func_name, args, kwargs=kwargs)
+
+    def _parse_id_or_call(self, tokens: List[Token], i: int, t: Token) -> tuple[int, Node]:
+        if i + 1 < len(tokens) and tokens[i + 1].type == 'LPAREN':
+            name = t.value
+            depth = 1
+            j = i + 2
+            elements_tokens = []
+            current_elem = []
+            if j < len(tokens) and tokens[j].type == 'RPAREN':
+                return j, Call(name, [])
+            else:
+                while j < len(tokens):
+                    t_type = tokens[j].type
+                    if t_type in ('LPAREN', 'LBRACKET', 'LBRACE'):
+                        depth += 1
+                    elif t_type in ('RPAREN', 'RBRACKET', 'RBRACE'):
+                        depth -= 1
+                    
+                    if depth == 0:
+                        if current_elem:
+                            elements_tokens.append(current_elem)
+                        break
+                    if t_type == 'COMMA' and depth == 1:
+                        elements_tokens.append(current_elem)
+                        current_elem = []
+                    else:
+                        current_elem.append(tokens[j])
+                    j += 1
+                args = []
+                kwargs = []
+                for elem in elements_tokens:
+                    if not elem: continue
+                    is_kw = (len(elem) >= 2 and elem[0].type == 'ID' and elem[1].type == 'ASSIGN')
+                    if is_kw:
+                        key = elem[0].value
+                        val = self.parse_expr_iterative(elem[2:], [])
+                        kwargs.append((key, val))
+                    else:
+                        args.append(self.parse_expr_iterative(elem, []))
+                return j, Call(name, args, kwargs=kwargs)
+        else:
+            val = VarAccess(t.value)
+            val.line = t.line
+            val.col = t.column
+            val.end_line = t.line
+            val.end_col = t.column + len(t.value)
+            return i, val
