@@ -35,19 +35,37 @@ name = ask "What is your name? "
 say "Welcome to ShellLite, " + name
 ```
 
-### Automation Example
+### Number Guessing Game Example
 
 ```shl
-import path
-import color
+use "random"
 
-folder = "logs"
-unless path.exists(folder)
-    mkdir folder
-    say color.green("Created logs directory")
+say "=== Number Guessing Game ==="
+say "I'm thinking of a number between 1 and 100."
+
+secret = randint(1, 100)
+attempts = 0
+max_attempts = 7
+
+while attempts < max_attempts
+    remaining = max_attempts - attempts
+    say "\nAttempts remaining: " + str(remaining)
+    
+    guess = int(ask "Your guess: ")
+    attempts += 1
+    
+    if guess == secret
+        say in green "\nCongratulations! You got it in " + str(attempts) + " attempts!"
+        exit
+    elif guess < secret
+        say "Too low!"
+    else
+        say "Too high!"
+
+say in red "\nGame Over! The number was " + str(secret)
 ```
 
-## Compilation
+## Compilation (WIP)
 
 ShellLite can be compiled to various targets for deployment:
 
