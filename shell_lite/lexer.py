@@ -262,6 +262,9 @@ class Lexer:
         ("MULEQ", re.compile(r"\*=")),
         ("DIVEQ", re.compile(r"/=")),
         ("MODEQ", re.compile(r"%=")),
+        ("POW", re.compile(r"\*\*")),
+        ("LSHIFT", re.compile(r"<<")),
+        ("RSHIFT", re.compile(r">>")),
         # Identifiers
         ("ID", re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")),
         # Single-character operators
@@ -270,6 +273,10 @@ class Lexer:
         ("MUL", re.compile(r"\*")),
         ("DIV", re.compile(r"/")),
         ("MOD", re.compile(r"%")),
+        ("BIT_AND", re.compile(r"&")),
+        ("BIT_OR", re.compile(r"\|")),
+        ("BIT_XOR", re.compile(r"\^")),
+        ("BIT_NOT", re.compile(r"~")),
         ("ASSIGN", re.compile(r"=")),
         ("GT", re.compile(r">")),
         ("LT", re.compile(r"<")),

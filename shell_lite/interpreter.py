@@ -444,6 +444,12 @@ class Interpreter:
             "*": lambda a, b: a * b,
             "/": lambda a, b: a / b,
             "%": lambda a, b: a % b,
+            "**": lambda a, b: a**b,
+            "&": lambda a, b: a & b,
+            "|": lambda a, b: a | b,
+            "^": lambda a, b: a ^ b,
+            "<<": lambda a, b: a << b,
+            ">>": lambda a, b: a >> b,
             "==": lambda a, b: a == b,
             "!=": lambda a, b: a != b,
             "<": lambda a, b: a < b,
@@ -459,7 +465,7 @@ class Interpreter:
 
     def visit_UnaryOp(self, node: UnaryOp):
         right = self.visit(node.right)
-        return -right if node.op == "-" else not right
+        return -right if node.op == "-" else (~right if node.op == "~" else not right)
 
     def visit_If(self, node: If):
         if self.visit(node.condition):
