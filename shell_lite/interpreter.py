@@ -444,7 +444,7 @@ class Interpreter:
             "*": lambda a, b: a * b,
             "/": lambda a, b: a / b,
             "%": lambda a, b: a % b,
-            "**": lambda a, b: a ** b,
+            "**": lambda a, b: a**b,
             "&": lambda a, b: a & b,
             "|": lambda a, b: a | b,
             "^": lambda a, b: a ^ b,

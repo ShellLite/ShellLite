@@ -1822,10 +1822,7 @@ class Parser:
                     and ops[-1] != "LPAREN"
                     and (
                         get_precedence(ops[-1]) > get_precedence(t.type)
-                        or (
-                            get_precedence(ops[-1]) == get_precedence(t.type)
-                            and t.type != "POW"
-                        )
+                        or (get_precedence(ops[-1]) == get_precedence(t.type) and t.type != "POW")
                     )
                 ):
                     apply_op()
