@@ -41,7 +41,7 @@ def execute_source(source: str, interpreter: Interpreter):
         for stmt in statements:
             result = interpreter.visit(stmt)
         return result
-        
+
     except Exception as e:
         if hasattr(e, "line") and e.line > 0:
             print(f"\n[ShellLite Error] on line {e.line}:")
@@ -662,7 +662,7 @@ def main():
     """CLI entry point: parse command-line arguments and route to appropriate functions."""
     if len(sys.argv) > 1:
         cmd = sys.argv[1]
-        safe_mode = "--safe" in sys.argv 
+        safe_mode = "--safe" in sys.argv
 
         output_format = None
 
@@ -791,18 +791,18 @@ def main():
                             cls=ShellLiteJSONEncoder,
                             ensure_ascii=False,
                         )
-                    ) 
+                    )
 
-                elif output_format == "csv": 
+                elif output_format == "csv":
                     import tempfile
-                
+
                     temp_path = tempfile.NamedTemporaryFile(
                         delete=False,
                         suffix=".csv",
                     ).name
-                
+
                     std_csv_export(result, temp_path)
-                
+
                     with open(temp_path, "r", encoding="utf-8") as f:
                         print(f.read())
 

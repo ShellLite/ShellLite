@@ -1520,7 +1520,6 @@ class Parser:
                 to_idx = -1
 
                 while j < len(tokens):
-                
                     tok = tokens[j]
 
                     if tok.type == "LBRACKET":
@@ -1542,23 +1541,13 @@ class Parser:
                         if current_elem:
                             elements_tokens.append(current_elem)
                         break
-                    
-                    if (
-                        tok.type == "COMMA"
-                        and depth == 1
-                        and brace_depth == 0
-                        and paren_depth == 0
-                    ):
+
+                    if tok.type == "COMMA" and depth == 1 and brace_depth == 0 and paren_depth == 0:
                         elements_tokens.append(current_elem)
                         current_elem = []
                         has_comma = True
                     else:
-                        if (
-                            tok.type == "TO"
-                            and depth == 1
-                            and brace_depth == 0
-                            and paren_depth == 0
-                        ):
+                        if tok.type == "TO" and depth == 1 and brace_depth == 0 and paren_depth == 0:
                             to_idx = len(current_elem)
 
                         current_elem.append(tok)
