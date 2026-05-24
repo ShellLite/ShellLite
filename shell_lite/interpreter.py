@@ -1,4 +1,6 @@
 import concurrent.futures
+import csv
+import datetime
 import importlib
 import json
 import os
@@ -6,11 +8,10 @@ import sys
 import threading
 import time
 from typing import Any, Dict, List, Optional
+
 from .ast_nodes import *
 from .parser import Parser
-import csv
-import datetime
-from collections.abc import Mapping
+
 
 class ReturnException(Exception):
     def __init__(self, value):
@@ -187,8 +188,6 @@ class Instance:
         for prop_name, default_node in class_def.properties:
             self.data[prop_name] = interpreter.visit(default_node) if default_node else None
 
-    # ML PIPELINE SUPPORT
-
     def to_dict(self, visited=None):
         if visited is None:
             visited = set()
@@ -207,7 +206,7 @@ class Instance:
         for key, value in self.data.items():
             result[key] = serialize_runtime_value(value, visited)
 
-        return result # I FEEL LUCKYYY!!!
+        return result
 
     def get_method(self, name: str):
         for method in self.class_def.methods:
@@ -264,9 +263,6 @@ def make_jit_tag_fn(name, interpreter):
 
     return fn
 
-# RUNTIME CLASSES OVER ----------
-
-# SERIALIZER START ----- (ML PIPELINE SUPPORT)
 
 class SerializationError(Exception):
     pass
@@ -428,8 +424,6 @@ def std_csv_export(data, path):
 
     return path
 
-# INTERPRETER STARTS --------
-
 class Interpreter:
     def __init__(self):
         self.safe_mode = os.environ.get("SHL_SAFE") == "1"
@@ -447,7 +441,6 @@ class Interpreter:
             "list": list,
             "len": len,
 
-            # ML PIPELINE: UTILITY FUNCS
             "save_json": std_json_export,
             "save_csv": std_csv_export,
             "serialize": serialize_runtime_value,
@@ -489,7 +482,7 @@ class Interpreter:
                 indent=indent,
                 cls=ShellLiteJSONEncoder,
                 ensure_ascii=False,
-            ), # We now support lambda funcs, custom objects, and avoiding special crashes on runtime.
+            ),
             "contains": lambda obj, item: item in obj,
             "std_io_read": lambda path: open(path, "r", encoding="utf-8").read(),
             "std_io_write": lambda path, content: open(path, "w", encoding="utf-8").write(content),
