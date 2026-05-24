@@ -1,16 +1,84 @@
-from typing import List
+import os
+from typing import List, Optional
 
 from .ast_nodes import (
-    Node, Number, String, Boolean, ListVal, Dictionary, VarAccess, BinOp,
-    UnaryOp, Call, MethodCall, PropertyAccess, IndexAccess, Await, Assign,
-    ConstAssign, TypedAssign, PropertyAssign, Print, If, While, For, ForIn,
-    Unless, Match, Repeat, Forever, Until, FunctionDef, Return, ClassDef,
-    Instantiation, Import, ImportAs, PythonImport, FromImport, Try, TryAlways,
-    Throw, Stop, Skip, Exit, ListComprehension, Spawn, Parallel, Gather,
-    Lock, Channel, Send, Receive, ModelDef, CreateTable, InsertRecord,
-    FindRecords, UpdateRecords, DeleteRecords, Convert, Download, ArchiveOp,
-    CsvOp, ClipboardOp, AutomationOp, FileWrite, FileRead, DatabaseOp,
-    Every, After, Listen, ServeStatic, OnRequest, Alert, Prompt, Confirm,
+    After,
+    Alert,
+    ArchiveOp,
+    Assertion,
+    Assign,
+    AutomationOp,
+    Await,
+    BinOp,
+    Boolean,
+    Call,
+    Channel,
+    ClassDef,
+    ClipboardOp,
+    Confirm,
+    ConstAssign,
+    Convert,
+    CreateTable,
+    CsvOp,
+    DatabaseOp,
+    DeleteRecords,
+    Dictionary,
+    Download,
+    Every,
+    Execute,
+    Exit,
+    FileRead,
+    FileWrite,
+    FindRecords,
+    For,
+    Forever,
+    ForIn,
+    FromImport,
+    FunctionDef,
+    Gather,
+    If,
+    Import,
+    ImportAs,
+    IndexAccess,
+    IndexAssign,
+    InsertRecord,
+    Instantiation,
+    ListComprehension,
+    Listen,
+    ListVal,
+    Lock,
+    Match,
+    MethodCall,
+    ModelDef,
+    Node,
+    Number,
+    OnRequest,
+    Parallel,
+    Print,
+    Prompt,
+    PropertyAccess,
+    PropertyAssign,
+    PythonImport,
+    Receive,
+    Repeat,
+    Return,
+    Send,
+    ServeStatic,
+    Skip,
+    Spawn,
+    Stop,
+    String,
+    TestBlock,
+    Throw,
+    Try,
+    TryAlways,
+    TypedAssign,
+    UnaryOp,
+    Unless,
+    Until,
+    UpdateRecords,
+    VarAccess,
+    While,
 )
 
 
@@ -31,8 +99,10 @@ class Compiler:
     def indent(self):
         return "    " * self.indentation
 
-    def visit(self, node: Node) -> str:
-        method_name = f'visit_{type(node).__name__}'
+    def visit(self, node: Optional[Node]) -> str:
+        if node is None:
+            return "None"
+        method_name = f"visit_{type(node).__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
@@ -47,22 +117,30 @@ class Compiler:
         for stmt in statements:
             stmt_code = self.visit(stmt)
             is_expr = isinstance(
-                stmt, (Number, String, Boolean, ListVal, 
-                       Dictionary, VarAccess, BinOp, 
-                       UnaryOp, Call, MethodCall, PropertyAccess, 
-                       IndexAccess, Await)
+                stmt,
+                (
+                    Number,
+                    String,
+                    Boolean,
+                    ListVal,
+                    Dictionary,
+                    VarAccess,
+                    BinOp,
+                    UnaryOp,
+                    Call,
+                    MethodCall,
+                    PropertyAccess,
+                    IndexAccess,
+                    Await,
+                ),
             )
             is_block_call = isinstance(stmt, Call) and stmt.body
             if is_expr and not is_block_call:
-                stmt_code = (
-                    f"_shl_ret = {stmt_code}\n"
-                    f"_web_builder.add_text(_shl_ret)"
-                )
-            indented_stmt = "\n".join(
-                [f"{self.indent()}{line}" for line in stmt_code.split('\n')]
-            )
+                stmt_code = f"_shl_ret = {stmt_code}\n_web_builder.add_text(_shl_ret)"
+            indented_stmt = "\n".join([f"{self.indent()}{line}" for line in stmt_code.split("\n")])
             code += indented_stmt + "\n"
         return code.rstrip()
+
     def compile(self, statements: List[Node]) -> str:
         code = [
             "import sys",
@@ -158,11 +236,9 @@ class Compiler:
             "    def add(self, child):",
             "        self.children.append(child)",
             "    def __str__(self):",
-            "        attr_str = ''.join("
-            "[f' {k}=\"{v}\"' for k,v in self.attrs.items()])",
+            "        attr_str = ''.join([f' {k}=\"{v}\"' for k,v in self.attrs.items()])",
             "        inner = ''.join([str(c) for c in self.children])",
-            "        if self.name in ('img', 'br', 'hr', 'input', "
-            "'meta', 'link'):",
+            "        if self.name in ('img', 'br', 'hr', 'input', 'meta', 'link'):",
             "            return f'<{self.name}{attr_str} />'",
             "        return f'<{self.name}{attr_str}>{inner}</{self.name}>'",
             "",
@@ -171,8 +247,7 @@ class Compiler:
             "    def push(self, tag):",
             "        if self.stack: self.stack[-1].add(tag)",
             "        self.stack.append(tag)",
-            "    def pop(self): "
-            "return self.stack.pop() if self.stack else None",
+            "    def pop(self): return self.stack.pop() if self.stack else None",
             "    def add_text(self, text):",
             "        if self.stack: self.stack[-1].add(text)",
             "        else: pass # Top level text?",
@@ -193,8 +268,7 @@ class Compiler:
             "        for arg in args:",
             "            if isinstance(arg, dict):",
             "                attrs.update(arg)",
-            "            elif isinstance(arg, str) and '=' in arg "
-            "and ' ' not in arg:",
+            "            elif isinstance(arg, str) and '=' in arg and ' ' not in arg:",
             "                k, v = arg.split('=', 1)",
             "                attrs[k] = v",
             "            else:",
@@ -215,16 +289,20 @@ class Compiler:
         code.append("# --- User Script ---")
         code.append(self.compile_block(statements))
         return "\n".join(code)
+
     def visit_Number(self, node: Number):
         return str(node.value)
+
     def visit_String(self, node: String):
         return repr(node.value)
+
     def visit_Boolean(self, node: Boolean):
         return str(node.value)
 
     def visit_ListVal(self, node: ListVal):
         elements = [self.visit(e) for e in node.elements]
         return f"[{', '.join(elements)}]"
+
     def visit_Dictionary(self, node: Dictionary):
         pairs = [f"{self.visit(k)}: {self.visit(v)}" for k, v in node.pairs]
         return f"{{{', '.join(pairs)}}}"
@@ -233,27 +311,38 @@ class Compiler:
         if self.active_properties is not None and node.name in self.active_properties:
             return f"self.{node.name}"
         return node.name
+
     def visit_Assign(self, node: Assign):
         if self.active_properties is not None and node.name in self.active_properties:
             return f"self.{node.name} = {self.visit(node.value)}"
         return f"{node.name} = {self.visit(node.value)}"
+
+    def visit_TypedAssign(self, node: TypedAssign):
+        # Python doesn't enforce types at runtime, but we could use annotations
+        return f"{node.name}: {node.type_hint} = {self.visit(node.value)}"
+
     def visit_ConstAssign(self, node: ConstAssign):
+        # Python doesn't have true constants, but we can treat it like an assignment
         if self.active_properties is not None and node.name in self.active_properties:
             return f"self.{node.name} = {self.visit(node.value)}"
         return f"{node.name} = {self.visit(node.value)}"
+
     def visit_PropertyAssign(self, node: PropertyAssign):
         return f"{node.instance_name}.{node.property_name} = {self.visit(node.value)}"
+
     def visit_BinOp(self, node: BinOp):
         left = self.visit(node.left)
         right = self.visit(node.right)
         op = node.op
-        if op == 'matches':
+        if op == "matches":
             return f"bool(re.search(str({right}), str({left})))"
-        elif op == 'and' or op == 'or':
-             return f"({left} {op} {right})"
+        elif op == "and" or op == "or":
+            return f"({left} {op} {right})"
         return f"({left} {op} {right})"
+
     def visit_UnaryOp(self, node: UnaryOp):
         return f"({node.op} {self.visit(node.right)})"
+
     def visit_Print(self, node: Print):
         if node.color or node.style:
             return f"shl_color_print({self.visit(node.expression)}, {repr(node.color)}, {repr(node.style)})"
@@ -270,12 +359,14 @@ class Compiler:
             code += self.compile_block(node.else_body)
             self.indentation -= 1
         return code
+
     def visit_While(self, node: While):
         code = f"while {self.visit(node.condition)}:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
+
     def visit_For(self, node: For):
         code = f"for _ in range({self.visit(node.count)}):\n"
         self.indentation += 1
@@ -293,20 +384,20 @@ class Compiler:
     def visit_Match(self, node: Match):
         code = ""
         match_var_expr = self.visit(node.match_expr)
-        
+
         for i, (case_expr, case_body) in enumerate(node.cases):
             case_val_expr = self.visit(case_expr)
             condition = f"{match_var_expr} == {case_val_expr}"
-            
+
             if i == 0:
                 code += f"if {condition}:\n"
             else:
                 code += f"\n{self.indent()}elif {condition}:\n"
-            
+
             self.indentation += 1
             code += self.compile_block(case_body)
             self.indentation -= 1
-            
+
         if node.default_case:
             if not node.cases:
                 code += "if True:\n"
@@ -315,7 +406,7 @@ class Compiler:
             self.indentation += 1
             code += self.compile_block(node.default_case)
             self.indentation -= 1
-            
+
         return code
 
     def visit_ForIn(self, node: ForIn):
@@ -324,80 +415,101 @@ class Compiler:
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
+
     def visit_Repeat(self, node: Repeat):
         return self.visit_For(For(node.count, node.body))
+
     def visit_Forever(self, node: Forever):
         code = "while True:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
+
     def visit_Until(self, node: Until):
-         code = f"while not ({self.visit(node.condition)}):\n"
-         self.indentation += 1
-         code += self.compile_block(node.body)
-         self.indentation -= 1
-         return code
+        code = f"while not ({self.visit(node.condition)}):\n"
+        self.indentation += 1
+        code += self.compile_block(node.body)
+        self.indentation -= 1
+        return code
 
     def visit_Convert(self, node: Convert):
-        if node.target_format.lower() == 'json':
+        if node.target_format.lower() == "json":
             return f"shl_json_stringify({self.visit(node.expression)})"
         raise ValueError(f"Unknown conversion format: {node.target_format}")
+
     def visit_Download(self, node: Download):
         return f"shl_download({self.visit(node.url)})"
+
     def visit_ArchiveOp(self, node: ArchiveOp):
         src = self.visit(node.source)
         trg = self.visit(node.target)
         return f"shl_archive({repr(node.op)}, {src}, {trg})"
+
     def visit_CsvOp(self, node: CsvOp):
-        if node.op == 'load':
+        if node.op == "load":
             return f"shl_csv_load({self.visit(node.path)})"
         else:
             return f"shl_csv_save({self.visit(node.data)}, {self.visit(node.path)})"
+
     def visit_ClipboardOp(self, node: ClipboardOp):
-        if node.op == 'copy':
-             return f"shl_clipboard_copy({self.visit(node.content)})"
+        if node.op == "copy":
+            return f"shl_clipboard_copy({self.visit(node.content)})"
         else:
-             return "shl_clipboard_paste()"
+            return "shl_clipboard_paste()"
+
     def visit_AutomationOp(self, node: AutomationOp):
         args = [self.visit(a) for a in node.args]
-        if node.action == 'press': return f"shl_press({args[0]})"
-        if node.action == 'type': return f"shl_type({args[0]})"
-        if node.action == 'click': return f"shl_click({args[0]}, {args[1]})"
-        if node.action == 'notify': return f"shl_notify({args[0]}, {args[1]})"
+        if node.action == "press":
+            return f"shl_press({args[0]})"
+        if node.action == "type":
+            return f"shl_type({args[0]})"
+        if node.action == "click":
+            return f"shl_click({args[0]}, {args[1]})"
+        if node.action == "notify":
+            return f"shl_notify({args[0]}, {args[1]})"
         return "pass"
 
     def visit_FileWrite(self, node: FileWrite):
         path = self.visit(node.path)
         cont = self.visit(node.content)
         return f"shl_file_write({path}, {cont}, {repr(node.mode)})"
+
     def visit_FileRead(self, node: FileRead):
         return f"shl_file_read({self.visit(node.path)})"
+
     def visit_DatabaseOp(self, node: DatabaseOp):
-        if node.op == 'open': return f"shl_db_open({self.visit(node.args[0])})"
-        if node.op == 'close': return "shl_db_close()"
-        if node.op == 'exec':
-             params = self.visit(node.args[1]) if len(node.args) > 1 else "[]"
-             return f"shl_db_exec({self.visit(node.args[0])}, {params})"
-        if node.op == 'query':
-             params = self.visit(node.args[1]) if len(node.args) > 1 else "[]"
-             return f"shl_db_query({self.visit(node.args[0])}, {params})"
+        if node.op == "open":
+            return f"shl_db_open({self.visit(node.args[0])})"
+        if node.op == "close":
+            return "shl_db_close()"
+        if node.op == "exec":
+            params = self.visit(node.args[1]) if len(node.args) > 1 else "[]"
+            return f"shl_db_exec({self.visit(node.args[0])}, {params})"
+        if node.op == "query":
+            params = self.visit(node.args[1]) if len(node.args) > 1 else "[]"
+            return f"shl_db_query({self.visit(node.args[0])}, {params})"
         return "None"
+
     def visit_Every(self, node: Every):
         interval = self.visit(node.interval)
-        if node.unit == 'minutes': interval = f"({interval} * 60)"
+        if node.unit == "minutes":
+            interval = f"({interval} * 60)"
         code = "while True:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         code += f"\n{self.indent()}time.sleep({interval})"
         self.indentation -= 1
         return code
+
     def visit_After(self, node: After):
         delay = self.visit(node.delay)
-        if node.unit == 'minutes': delay = f"({delay} * 60)"
+        if node.unit == "minutes":
+            delay = f"({delay} * 60)"
         code = f"time.sleep({delay})\n"
         code += self.compile_block(node.body)
         return code
+
     def visit_FunctionDef(self, node: FunctionDef):
         args_strs = []
         has_default = False
@@ -407,10 +519,7 @@ class Compiler:
                 has_default = True
             else:
                 if has_default:
-                    msg = (
-                        f"Non-default argument '{arg_name}' follows "
-                        f"default argument in function '{node.name}'"
-                    )
+                    msg = f"Non-default argument '{arg_name}' follows default argument in function '{node.name}'"
                     raise SyntaxError(msg)
                 args_strs.append(arg_name)
         code = f"def {node.name}({', '.join(args_strs)}):\n"
@@ -421,8 +530,10 @@ class Compiler:
         code += f"\n{self.indent()}return _shl_ret"
         self.indentation = old_indent
         return code
+
     def visit_Return(self, node: Return):
         return f"return {self.visit(node.value)}"
+
     def visit_Call(self, node: Call):
         args = [self.visit(a) for a in node.args]
         if node.kwargs:
@@ -430,19 +541,20 @@ class Compiler:
                 args.append(f"{k}={self.visit(v)}")
         call_expr = f"{node.name}({', '.join(args)})"
         if node.body:
-             var_name = f"_tag_{self._next_uid()}"
-             code = f"{var_name} = {call_expr}\n"
-             code += f"with BuilderContext({var_name}):\n"
-             old_indent = self.indentation
-             self.indentation = 1
-             code += self.compile_block(node.body)
-             self.indentation = old_indent
-             code += f"\n_shl_ret = {var_name}"
-             code += f"\n_web_builder.add_text({var_name})"
-             return code
+            var_name = f"_tag_{self._next_uid()}"
+            code = f"{var_name} = {call_expr}\n"
+            code += f"with BuilderContext({var_name}):\n"
+            old_indent = self.indentation
+            self.indentation = 1
+            code += self.compile_block(node.body)
+            self.indentation = old_indent
+            code += f"\n_shl_ret = {var_name}"
+            code += f"\n_web_builder.add_text({var_name})"
+            return code
         return call_expr
+
     def visit_ClassDef(self, node: ClassDef):
-        old_props = getattr(self, 'active_properties', None)
+        old_props = getattr(self, "active_properties", None)
         prop_names = []
         for prop in node.properties:
             if isinstance(prop, tuple):
@@ -481,15 +593,14 @@ class Compiler:
                     m_args.append(f"{arg_name}={self.visit(default_node)}")
                 else:
                     m_args.append(arg_name)
-            code += (
-                f"\n{self.indent()}def {method.name}({', '.join(m_args)}):\n"
-            )
+            code += f"\n{self.indent()}def {method.name}({', '.join(m_args)}):\n"
             self.indentation += 1
             code += self.compile_block(method.body)
             self.indentation -= 1
         self.indentation -= 1
         self.active_properties = old_props
         return code
+
     def visit_Instantiation(self, node: Instantiation):
         args = [self.visit(a) for a in node.args]
         return f"{node.var_name} = {node.class_name}({', '.join(args)})"
@@ -497,23 +608,28 @@ class Compiler:
     def visit_MethodCall(self, node: MethodCall):
         args = [self.visit(a) for a in node.args]
         return f"{node.instance_name}.{node.method_name}({', '.join(args)})"
+
     def visit_PropertyAccess(self, node: PropertyAccess):
         return f"{node.instance_name}.{node.property_name}"
+
     def visit_IndexAccess(self, node: IndexAccess):
         return f"{self.visit(node.obj)}[{self.visit(node.index)}]"
+
     def visit_IndexAssign(self, node: IndexAssign):
         return f"{self.visit(node.obj)}[{self.visit(node.index)}] = {self.visit(node.value)}"
+
     def visit_Import(self, node: Import):
-        if node.path in ('math', 'time', 'http', 'env', 'args', 'path', 're'):
-             return f"{node.path} = STD_MODULES['{node.path}']"
+        if node.path in ("math", "time", "http", "env", "args", "path", "re"):
+            return f"{node.path} = STD_MODULES['{node.path}']"
         else:
-             base = os.path.basename(node.path).replace('.shl', '').replace('.py', '')
-             return f"from {base} import *"
+            base = os.path.basename(node.path).replace(".shl", "").replace(".py", "")
+            return f"from {base} import *"
+
     def visit_ImportAs(self, node: ImportAs):
-        if node.path in ('math', 'time', 'http', 'env', 'args', 'path', 're'):
-             return f"{node.alias} = STD_MODULES['{node.path}']"
-        base = os.path.basename(node.path).replace('.shl', '')
-        base = base.replace('.py', '')
+        if node.path in ("math", "time", "http", "env", "args", "path", "re"):
+            return f"{node.alias} = STD_MODULES['{node.path}']"
+        base = os.path.basename(node.path).replace(".shl", "")
+        base = base.replace(".py", "")
         return f"import {base} as {node.alias}"
 
     def visit_FromImport(self, node: FromImport):
@@ -531,6 +647,13 @@ class Compiler:
         if node.alias:
             return f"import {node.module_name} as {node.alias}"
         return f"import {node.module_name}"
+
+    def visit_Throw(self, node: Throw):
+        return f"{self.indent()}raise Exception({self.visit(node.message)})"
+
+    def visit_Execute(self, node: Execute):
+        return f"{self.indent()}os.system({self.visit(node.code)})"
+
     def visit_Try(self, node: Try):
         code = "try:\n"
         self.indentation += 1
@@ -541,6 +664,7 @@ class Compiler:
         code += self.compile_block(node.catch_body)
         self.indentation -= 1
         return code
+
     def visit_TryAlways(self, node: TryAlways):
         code = "try:\n"
         self.indentation += 1
@@ -556,13 +680,17 @@ class Compiler:
         code += self.compile_block(node.always_body)
         self.indentation -= 1
         return code
-    def visit_Throw(self, node: Throw):
-        return f"raise Exception({self.visit(node.message)})"
-    def visit_Stop(self, node: Stop): return "break"
-    def visit_Skip(self, node: Skip): return "continue"
+
+    def visit_Stop(self, node: Stop):
+        return "break"
+
+    def visit_Skip(self, node: Skip):
+        return "continue"
+
     def visit_Exit(self, node: Exit):
         code = self.visit(node.code) if node.code else "0"
         return f"sys.exit({code})"
+
     def visit_ListComprehension(self, node: ListComprehension):
         iter_str = self.visit(node.iterable)
         expr_str = self.visit(node.expr)
@@ -571,16 +699,16 @@ class Compiler:
             c_str = f" if {self.visit(node.condition)}"
         return f"[{expr_str} for {node.var_name} in {iter_str}{c_str}]"
 
-
     def visit_Spawn(self, node: Spawn):
         if isinstance(node.call, Call):
             args = [self.visit(a) for a in node.call.args]
             return f"_executor.submit({node.call.name}, {', '.join(args)})"
         return f"_executor.submit({self.visit(node.call)})"
+
     def visit_Await(self, node: Await):
         task = self.visit(node.task)
         return f"( {task}.result() if hasattr({task}, 'result') else {task} )"
-    
+
     # --- Epic 3: Concurrency ---
     def visit_Parallel(self, node: Parallel):
         code = "[\n"
@@ -640,7 +768,7 @@ class Compiler:
         upds = []
         for f, v in node.updates:
             upds.append(f"('{f}', {self.visit(v)})")
-        
+
         conds_str = "[" + ", ".join(conds) + "]"
         upds_str = "[" + ", ".join(upds) + "]"
         return f"shl_db_update('{node.model_name}', {conds_str}, {upds_str})"
@@ -655,16 +783,16 @@ class Compiler:
     def visit_Listen(self, node: Listen):
         port = self.visit(node.port)
         code = f"server_address = ('', {port})\n"
-        h_setup = (
-            "httpd = HTTPServer(server_address, ShellLiteHTTPHandler)"
-        )
+        h_setup = "httpd = HTTPServer(server_address, ShellLiteHTTPHandler)"
         code += f"{self.indent()}{h_setup}\n"
         prnt = "print(f'Serving on port {server_address[1]}...')"
         code += f"{self.indent()}{prnt}\n"
         code += f"{self.indent()}httpd.serve_forever()"
         return code
+
     def visit_ServeStatic(self, node: ServeStatic):
-         return f"GLOBAL_STATIC_ROUTES[{self.visit(node.url)}] = {self.visit(node.folder)}"
+        return f"GLOBAL_STATIC_ROUTES[{self.visit(node.url)}] = {self.visit(node.folder)}"
+
     def visit_OnRequest(self, node: OnRequest):
         path = self.visit(node.path)
         u_id = self._next_uid()
@@ -678,9 +806,26 @@ class Compiler:
         self.indentation = old_indent
         code += f"\nGLOBAL_ROUTES[{path}] = {func_name}"
         return code
+
     def visit_Alert(self, node: Alert):
         return f"shl_alert({self.visit(node.message)})"
+
     def visit_Prompt(self, node: Prompt):
         return f"shl_prompt({self.visit(node.prompt)})"
+
     def visit_Confirm(self, node: Confirm):
         return f"shl_confirm({self.visit(node.prompt)})"
+
+    def visit_Assertion(self, node: Assertion):
+        # Transpiled to a basic python assertion
+        left = self.visit(node.left)
+        op = node.op
+        if op == "truthy":
+            return f"assert {left}"
+        right = self.visit(node.right) if node.right else "None"
+        return f"assert {left} {op} {right}"
+
+    def visit_TestBlock(self, node: TestBlock):
+        code = f"print({repr(f'[RUNNING] {node.name}...')})\n"
+        code += self.compile_block(node.body)
+        return code
