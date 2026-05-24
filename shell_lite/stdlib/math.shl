@@ -1,0 +1,40 @@
+to pow base, exp
+    abs_exp = abs(exp)
+    result = 1
+    for i in range 0 abs_exp
+        result = result * base
+    
+    if exp < 0
+        give 1.0 / result
+    else
+        give result
+
+to factorial n
+    if n <= 1
+        give 1
+    give n * factorial(n - 1)
+
+to sqrt n
+    if n <= 0
+        give 0
+    x = n / 2.0
+    tolerance = 0.00001
+    for i in range 0 100
+        root_sqrt = x * x
+        diff = abs(root_sqrt - n)
+        if diff < tolerance
+            give x
+        x = 0.5 * (x + (n / x))
+    give x  
+
+to is_even n
+    if (n % 2) == 0
+        give true
+    else
+        give false
+
+to is_odd n
+    if (n % 2) != 0
+        give true
+    else 
+        give false
