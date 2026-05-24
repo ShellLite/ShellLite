@@ -7,6 +7,7 @@ the implementation for ShellLite's dynamic
 features (lists, strings, memory)
 when compiling to native machine code.
 """
+from __future__ import annotations
 
 import logging
 import os

@@ -35,6 +35,10 @@ class TestStdLib(unittest.TestCase):
     def test_builtin_value_functions(self):
         cases = [
             ("items_len = len([1, 2, 3])", "items_len", 3),
+            ("items = list([1, 2, 3])", "items", [1, 2, 3]),
+            ("flag = bool(1)", "flag", True),
+            ("decimal = float(7)", "decimal", 7.0),
+            ("series = [1 to 4]", "series", [1, 2, 3]),
             ("kind = typeof(123)", "kind", "int"),
             ("magnitude = abs(0 - 9)", "magnitude", 9),
             ("text = str(42)", "text", "42"),
