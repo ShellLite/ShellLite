@@ -1,6 +1,7 @@
 """
 Unit tests for ShellLite built-in/stdlib behavior.
 """
+
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -59,12 +60,12 @@ class TestStdLib(unittest.TestCase):
         self.assertEqual(last_val, "Hello ShellLite")
 
     def test_input_function(self):
-        with patch('builtins.input', return_value='ShellLite User') as mocked_input:
+        with patch("builtins.input", return_value="ShellLite User") as mocked_input:
             env, _, _ = self.run_code('user_name = ask "Your name? "')
 
-        self.assertEqual(env.get('user_name'), 'ShellLite User')
-        mocked_input.assert_called_once_with('Your name? ')
+        self.assertEqual(env.get("user_name"), "ShellLite User")
+        mocked_input.assert_called_once_with("Your name? ")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
