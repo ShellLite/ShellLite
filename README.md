@@ -1,8 +1,8 @@
 # ShellLite
 
-**An English Like Programming Language for Accessible Automation and Education**
+**A Natural Language Programming System**
 
-ShellLite is a high level programming language designed to bridge the gap between natural language and executable code. It prioritizes readability and accessibility without sacrificing the power of a modern general purpose language.
+ShellLite is a high level programming language designed to bridge the gap between natural language and executable code. It prioritizes readability without sacrificing the power of a modern general purpose language.
 
 ## Technical Foundation
 
@@ -14,9 +14,9 @@ The project implements **Geometric Binding Parsing (GBP)**, an algorithm that de
 
 *   **Natural Language Syntax:** Designed to be read like plain English or pseudocode, reducing the cognitive load for beginners.
 *   **Python Interop:** Seamlessly import and utilize any Python module via a robust proxying layer.
-*   **Cross-Platform GUI:** Built-in engine for creating desktop applications using an intuitive widget-based syntax.
-*   **Multi-Backend Compilation:** Supports execution via a tree-walking interpreter or compilation to C, JavaScript, and WebAssembly (WASM).
-*   **Integrated Package Management:** Built-in support for installing and managing dependencies directly from GitHub repositories.
+*   **Cross Platform GUI:** A built in engine for creating desktop applications using an intuitive widget based syntax.
+*   **Multi Backend Compilation:** Supports execution via a tree-walking interpreter or compilation to C, JavaScript, and WebAssembly (WASM). (TO BE REWRITTEN)
+*   **Integrated Package Management:** Built in support for installing and managing dependencies directly from GitHub repositories.
 
 ## Quick Start
 
@@ -59,11 +59,11 @@ shl compile script.shl --target wasm   # Build for WebAssembly
 
 ## Research & Documentation
 
-For a deep dive into the underlying parsing theory, please refer to the papers on Zenodo:
+For a deep dive into the underlying parsing theory, please refer to the papers on Zenodo By CERN:
 - [Geometric Binding: A Topological Approach to Indentation Sensitive Parsing](https://zenodo.org/records/18722827)
 - [ShellLite: White paper](https://zenodo.org/records/18228699)
 
-Detailed language guides can be found in the `docs/` directory.
+Detailed language guides can be found in the `docs/` directory. (TO BE RE WRITTEN)
 
 ## License
 
