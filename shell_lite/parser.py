@@ -112,17 +112,17 @@ class Parser:
             "IS": 5,
             "IN": 5,
             "NOTIN": 5,
-            "BIT_OR": 6,
+            "BIT_OR": 5.2,
+            "BIT_XOR": 5.4,
+            "BIT_AND": 5.6,
+            "LSHIFT": 5.8,
+            "RSHIFT": 5.8,
             "PLUS": 6,
             "MINUS": 6,
-            "BIT_XOR": 7,
             "MUL": 7,
             "DIV": 7,
             "MOD": 7,
-            "BIT_AND": 8,
             "POW": 8,
-            "LSHIFT": 9,
-            "RSHIFT": 9,
             "DOT": 9,
             "LPAREN": 10,
             "LBRACKET": 10,
@@ -1364,25 +1364,37 @@ class Parser:
         values: List[Node] = []
         ops: List[str] = []
 
-        # Local precedence for shunting-yard (fallback if not in self.precedence)
+        # Local precedence for shunting-yard (must match self.precedence scale)
         local_precedence = {
-            "PLUS": 10,
-            "MINUS": 10,
-            "MUL": 20,
-            "DIV": 20,
-            "MOD": 20,
-            "GT": 5,
-            "LT": 5,
-            "EQ": 4,
-            "AND": 2,
             "OR": 1,
-            "MATCHES": 5,
-            "IS": 4,
+            "AND": 2,
+            "NOT": 3,
+            "EQ": 4,
+            "NEQ": 4,
+            "LT": 5,
+            "GT": 5,
+            "LE": 5,
+            "GE": 5,
+            "IS": 5,
             "BE": 4,
+            "IN": 5,
+            "NOTIN": 5,
+            "MATCHES": 5,
             "CONTAINS": 5,
-            "DOT": 30,
-            "NOT": 15,
-            "LBRACKET": 30,
+            "BIT_OR": 5.2,
+            "BIT_XOR": 5.4,
+            "BIT_AND": 5.6,
+            "LSHIFT": 5.8,
+            "RSHIFT": 5.8,
+            "PLUS": 6,
+            "MINUS": 6,
+            "MUL": 7,
+            "DIV": 7,
+            "MOD": 7,
+            "POW": 8,
+            "DOT": 9,
+            "LPAREN": 10,
+            "LBRACKET": 10,
         }
 
         def apply_op():
@@ -1517,7 +1529,7 @@ class Parser:
                     is_indexing = True
 
                 if is_indexing:
-                    while ops and ops[-1] != "LPAREN" and get_precedence(ops[-1]) >= 30:
+                    while ops and ops[-1] != "LPAREN" and get_precedence(ops[-1]) >= get_precedence("LPAREN"):
                         apply_op()
 
                 depth = 1
