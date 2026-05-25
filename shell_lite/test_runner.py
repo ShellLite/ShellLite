@@ -13,6 +13,8 @@ from .parser import Parser
 
 
 class TestRunner:
+    __test__ = False
+
     def __init__(self, target_dir: str = "."):
         self.target_dir = target_dir
 
