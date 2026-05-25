@@ -1,0 +1,88 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Extract Version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Update Version Strings
+        run: |
+          python -c "
+          import re, os
+
+          version = '${{ env.VERSION }}'
+          print(f'Bumping version to {version}...')
+
+          # 1. Update pyproject.toml
+          if os.path.exists('pyproject.toml'):
+              with open('pyproject.toml', 'r') as f: data = f.read()
+              data = re.sub(r'version = \"[^\"]+\"', f'version = \"{version}\"', data, count=1)
+              with open('pyproject.toml', 'w') as f: f.write(data)
+
+          # 2. Update shell_lite/main.py
+          main_path = 'shell_lite/main.py'
+          if os.path.exists(main_path):
+              with open(main_path, 'r') as f: data = f.read()
+              data = re.sub(r'v\d+\.\d+\.\d+(\.\d+)?', f'v{version}', data)
+              data = re.sub(r'\(\d+\.\d+\.\d+(\.\d+)?\)', f'({version})', data)
+              data = re.sub(r'for \d+\.\d+\.\d+(\.\d+)?', f'for {version}', data)
+              data = re.sub(r'ShellLite \d+\.\d+\.\d+(\.\d+)?', f'ShellLite {version}', data)
+              with open(main_path, 'w') as f: f.write(data)
+
+          # 3. Update shell_lite/lsp_server.py
+          lsp_path = 'shell_lite/lsp_server.py'
+          if os.path.exists(lsp_path):
+              with open(lsp_path, 'r') as f: data = f.read()
+              data = re.sub(r'\"version\": \"[^\"]+\"', f'\"version\": \"{version}\"', data)
+              with open(lsp_path, 'w') as f: f.write(data)
+
+          # 4. Update CITATION.cff
+          if os.path.exists('CITATION.cff'):
+              with open('CITATION.cff', 'r') as f: data = f.read()
+              data = re.sub(r'version: \d+\.\d+\.\d+(\.\d+)?', f'version: {version}', data)
+              with open('CITATION.cff', 'w') as f: f.write(data)
+          "
+
+      - name: Commit and Push Version Bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml shell_lite/main.py shell_lite/lsp_server.py CITATION.cff || true
+          # Only commit if there are changes
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: bump version to ${{ env.VERSION }} [skip ci]"
+            git push origin main
+          fi
+
+      - name: Install build tools
+        run: python -m pip install build
+
+      - name: Build a binary wheel and a source tarball
+        run: python -m build
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
