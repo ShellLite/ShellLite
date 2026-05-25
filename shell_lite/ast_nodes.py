@@ -408,6 +408,7 @@ class Assertion(Node):
 
 @dataclass
 class TestBlock(Node):
+    __test__ = False
     name: str
     body: List[Node]
 
