@@ -624,7 +624,7 @@ class Interpreter:
         left = self.visit(node.left)
         if node.op == ".":
             member_name = node.right.name if hasattr(node.right, "name") else str(node.right)
-            
+
             if hasattr(left, "get_member"):
                 member = left.get_member(member_name)
             else:
