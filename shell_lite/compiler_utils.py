@@ -57,21 +57,15 @@ def ensure_safe(statements):
 
     def check_node(node):
         if isinstance(node, unsafe_types):
-            raise PermissionError(
-                f"Operation '{type(node).__name__}' is restricted in Safe Mode."
-            )
+            raise PermissionError(f"Operation '{type(node).__name__}' is restricted in Safe Mode.")
 
         if isinstance(node, PythonImport):
             if node.module_name != "math":
-                raise PermissionError(
-                    f"Importing native module '{node.module_name}' is restricted in Safe Mode."
-                )
+                raise PermissionError(f"Importing native module '{node.module_name}' is restricted in Safe Mode.")
 
         if isinstance(node, FromImport):
             if node.module_name != "math":
-                raise PermissionError(
-                    f"Importing from native module '{node.module_name}' is restricted in Safe Mode."
-                )
+                raise PermissionError(f"Importing from native module '{node.module_name}' is restricted in Safe Mode.")
         for attr in vars(node):
             val = getattr(node, attr)
             if isinstance(val, list):

@@ -60,9 +60,7 @@ def test_integration_hello_world(compiler):
 
 
 def test_integration_loop(compiler):
-    stmts = [
-        FunctionDef("main", [], [Repeat(Number("5"), [Print([String("Looping")])])])
-    ]
+    stmts = [FunctionDef("main", [], [Repeat(Number("5"), [Print([String("Looping")])])])]
     module = compiler.compile(stmts, is_entry_point=True)
     ir_str = str(module)
     assert "define i32" in ir_str

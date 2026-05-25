@@ -42,9 +42,7 @@ else
         self.assertEqual(len(nodes), 1)
         self.assertIsInstance(nodes[0], ast.If)
         self.assertEqual(len(nodes[0].else_body), 1)  # Contains ELIF block
-        self.assertIsInstance(
-            nodes[0].else_body[0], ast.If
-        )  # ELIF is parsed as nested IF
+        self.assertIsInstance(nodes[0].else_body[0], ast.If)  # ELIF is parsed as nested IF
         self.assertIsNotNone(nodes[0].else_body[0].else_body)  # ELSE block
 
     def test_repeat_loop(self):
