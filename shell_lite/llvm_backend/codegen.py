@@ -156,7 +156,7 @@ class LLVMCompiler:
         block = self.main_func.append_basic_block(name="entry")
         self.builder = ir.IRBuilder(block)
 
-        self.str_constants = {}
+        self.str_constants: dict[str, str] = {}
         self.struct_registry = {}
         self.classes = {}
         self.scanned_files = set()
@@ -173,7 +173,7 @@ class LLVMCompiler:
             puts_ty = ir.FunctionType(ir.IntType(32), [self.char_ptr])
             puts_func = ir.Function(self.module, puts_ty, name="puts")
         self.builder.call(puts_func, [fmt_ptr])
-        self.scopes = [{}]
+        self.scopes: list[dict[str, str]] = []
         self.loop_stack = []
 
     def _get_scope(self):

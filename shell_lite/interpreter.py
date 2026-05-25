@@ -1,6 +1,8 @@
 # REGULAR IMPORTS
 
 import concurrent.futures
+import csv
+import datetime
 import importlib
 import json
 import os
@@ -197,8 +199,6 @@ class Instance:
         for prop_name, default_node in class_def.properties:
             self.data[prop_name] = interpreter.visit(default_node) if default_node else None
 
-    # ML PIPELINE SUPPORT
-
     def to_dict(self, visited=None):
         if visited is None:
             visited = set()
@@ -217,7 +217,7 @@ class Instance:
         for key, value in self.data.items():
             result[key] = serialize_runtime_value(value, visited)
 
-        return result # I FEEL LUCKYYY!!!
+        return result
 
     def get_method(self, name: str):
         for method in self.class_def.methods:
@@ -440,6 +440,153 @@ def std_csv_export(data, path):
 
 # INTERPRETER STARTS --------
 
+class SerializationError(Exception):
+    pass
+
+
+class ShellLiteJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Instance):
+            return obj.to_dict()
+
+        if isinstance(obj, LambdaFunction):
+            return {
+                "__type__": "LambdaFunction",
+                "name": obj.name,
+                "params": obj.params,
+            }
+
+        if isinstance(obj, PythonBridgeWrapper):
+            return serialize_runtime_value(obj._obj)
+
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return obj.isoformat()
+
+        try:
+            return super().default(obj)
+        except TypeError:
+            return str(obj)
+
+
+def serialize_runtime_value(value, visited=None):
+    if visited is None:
+        visited = set()
+
+    primitive_types = (str, int, float, bool, type(None))
+
+    if isinstance(value, primitive_types):
+        return value
+
+    obj_id = id(value)
+
+    if obj_id in visited:
+        return "<circular_reference>"
+
+    visited.add(obj_id)
+
+    if isinstance(value, Instance):
+        return value.to_dict(visited)
+
+    if isinstance(value, LambdaFunction):
+        return {
+            "__type__": "LambdaFunction",
+            "name": value.name,
+            "params": value.params,
+        }
+
+    if isinstance(value, PythonBridgeWrapper):
+        return serialize_runtime_value(value._obj, visited)
+
+    if isinstance(value, dict):
+        return {str(k): serialize_runtime_value(v, visited) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [serialize_runtime_value(v, visited) for v in value]
+
+    if isinstance(value, (datetime.date, datetime.datetime)):
+        return value.isoformat()
+
+    return str(value)
+
+
+# JSON
+
+
+def std_json_export(data, path, indent=2):
+    serialized = serialize_runtime_value(data)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(
+            serialized,
+            f,
+            indent=indent,
+            cls=ShellLiteJSONEncoder,
+            ensure_ascii=False,
+        )
+
+    return path
+
+
+# CSV
+
+
+def validate_csv_rows(data):
+    if not isinstance(data, list):
+        raise SerializationError("CSV export expects a list")
+
+    if not data:
+        return "empty"
+
+    first = data[0]
+
+    if isinstance(first, dict):
+        return "dict_rows"
+
+    if isinstance(first, (list, tuple)):
+        return "list_rows"
+
+    raise SerializationError("CSV export requires list of dicts or list of lists")
+
+
+def std_csv_export(data, path):
+    mode = validate_csv_rows(data)
+
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        if mode == "empty":
+            return path
+
+        if mode == "dict_rows":
+            headers = set()
+
+            for row in data:
+                headers.update(row.keys())
+
+            headers = list(headers)
+
+            dict_writer = csv.DictWriter(
+                f,
+                fieldnames=headers,
+                quoting=csv.QUOTE_MINIMAL,
+            )
+
+            dict_writer.writeheader()
+
+            for row in data:
+                serialized_row = {k: serialize_runtime_value(v) for k, v in row.items()}
+
+                dict_writer.writerow(serialized_row)
+
+        elif mode == "list_rows":
+            list_writer = csv.writer(
+                f,
+                quoting=csv.QUOTE_MINIMAL,
+            )
+
+            for row in data:
+                list_writer.writerow([serialize_runtime_value(v) for v in row])
+    return path
+
+
 class Interpreter:
     def __init__(self):
         self.safe_mode = os.environ.get("SHL_SAFE") == "1"
@@ -456,12 +603,9 @@ class Interpreter:
             "bool": bool,
             "list": list,
             "len": len,
-
-            # ML PIPELINE: UTILITY FUNCS
             "save_json": std_json_export,
             "save_csv": std_csv_export,
             "serialize": serialize_runtime_value,
-
             "range": lambda *args: list(range(*args)),
             "abs": abs,
             "typeof": lambda x: type(x).__name__,
@@ -499,7 +643,7 @@ class Interpreter:
                 indent=indent,
                 cls=ShellLiteJSONEncoder,
                 ensure_ascii=False,
-            ), # We now support lambda funcs, custom objects, and avoiding special crashes on runtime.
+            ),
             "contains": lambda obj, item: item in obj,
             "std_io_read": lambda path: open(path, "r", encoding="utf-8").read(),
             "std_io_write": lambda path, content: open(path, "w", encoding="utf-8").write(content),
@@ -654,6 +798,12 @@ class Interpreter:
             "*": lambda a, b: a * b,
             "/": lambda a, b: a / b,
             "%": lambda a, b: a % b,
+            "**": lambda a, b: a**b,
+            "&": lambda a, b: a & b,
+            "|": lambda a, b: a | b,
+            "^": lambda a, b: a ^ b,
+            "<<": lambda a, b: a << b,
+            ">>": lambda a, b: a >> b,
             "==": lambda a, b: a == b,
             "!=": lambda a, b: a != b,
             "<": lambda a, b: a < b,
@@ -669,7 +819,7 @@ class Interpreter:
 
     def visit_UnaryOp(self, node: UnaryOp):
         right = self.visit(node.right)
-        return -right if node.op == "-" else not right
+        return -right if node.op == "-" else (~right if node.op == "~" else not right)
 
     def visit_If(self, node: If):
         if self.visit(node.condition):

@@ -159,7 +159,7 @@ class ShellLiteDocument:
         self._collect_symbols_and_semantic_checks()
 
     def _collect_symbols_and_semantic_checks(self):
-        defined_names = {}
+        defined_names: dict[str, str] = {}
 
         def walk(nodes):
             for node in nodes:

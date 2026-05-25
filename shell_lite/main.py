@@ -18,10 +18,10 @@ from .ast_nodes import (
 )
 from .interpreter import (
     Interpreter,
-    serialize_runtime_value,
     ShellLiteJSONEncoder,
+    serialize_runtime_value,
     std_csv_export,
-) # NEEDED SOME NEW IMPWOWRWTS HEHEHEHE
+)
 from .lexer import Lexer
 from .parser import Parser
 
@@ -40,8 +40,8 @@ def execute_source(source: str, interpreter: Interpreter):
 
         for stmt in statements:
             result = interpreter.visit(stmt)
-        return result # baka? oh you wanna capture flags, no?
-        
+        return result
+
     except Exception as e:
         if hasattr(e, "line") and e.line > 0:
             print(f"\n[ShellLite Error] on line {e.line}:")
@@ -662,11 +662,9 @@ def main():
     """CLI entry point: parse command-line arguments and route to appropriate functions."""
     if len(sys.argv) > 1:
         cmd = sys.argv[1]
-        safe_mode = "--safe" in sys.argv # UPDATED AS PAR TO NEW ML PIPELINE
+        safe_mode = "--safe" in sys.argv
 
         output_format = None
-
-        # NEW FLAGS YAYAYYAYAY!! (ref: ML PIPELINE INTERPRETER.)
 
         if "--fmt" in sys.argv:
             try:
@@ -785,7 +783,6 @@ def main():
                 interpreter.safe_mode = safe_mode
                 result = execute_source(source, interpreter)
 
-                # FILESSSSSS
                 if output_format == "json":
                     print(
                         json.dumps(
@@ -794,18 +791,18 @@ def main():
                             cls=ShellLiteJSONEncoder,
                             ensure_ascii=False,
                         )
-                    ) # EWWWWWWWWWWWWWWWWWWWWWWWWW
+                    )
 
-                elif output_format == "csv": # CODE AUTHOR LOVES CSV
+                elif output_format == "csv":
                     import tempfile
-                
+
                     temp_path = tempfile.NamedTemporaryFile(
                         delete=False,
                         suffix=".csv",
                     ).name
-                
+
                     std_csv_export(result, temp_path)
-                
+
                     with open(temp_path, "r", encoding="utf-8") as f:
                         print(f.read())
 

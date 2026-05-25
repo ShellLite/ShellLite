@@ -1,3 +1,11 @@
+"""
+This file contains 3 different tests,
+as a tester you are requested to run one test at a time.
+Comment the rest. Thankyou.
+"""
+
+# MAIN TEST
+
 fam = {
     "contributor": "Akshansh",
     "bbg": "shrey"
@@ -6,5 +14,28 @@ fam = {
 print(json_stringify(fam))
 
 # RUN: python -m shell_lite.main run tests/MLPIPELINE/test_jsoncsv.shl
-# If output is same as file content, yayayyyayayayayayayayayyayya
-#PASS
+# If output is same as file content, PASS!
+
+# CSV TEST
+
+rows = [
+  {
+    "contributor1": "shrey",
+    "status": "booooo"
+  },
+  {
+    "contributor2": "akshansh",
+    "status": "booooo"
+  }
+]
+
+save_csv(rows, "tests/MLPIPELINE/results/results.csv")
+
+# CLI TEST
+
+{
+    "owner": "shrey",
+    "contributor": "somerandomkid"
+}
+
+# Run: python -m shell_lite.main run tests/MLPIPELINE/test_jsoncsv.shl --fmt json

@@ -1,0 +1,21 @@
+use "math"
+
+#-----------------
+#   TestCases 
+#-----------------
+
+say pow(2,2) #expected result = 4
+say pow(0, 10) #expected result = 0
+negative_base = 0-2
+say pow(negative_base, 2) #expected result = 4
+say pow(negative_base, 3) #expected result = -8
+say pow(2, negative_base) #expected result = 0,25
+
+say factorial(3) #expected result = 6
+say factorial(2) #expected result = 2
+
+say is_even(2) #expected result = true
+say is_even(3) #expected result = false
+
+say is_odd(2) #expected result = false
+say is_odd(3) #expected result = true
