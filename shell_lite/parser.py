@@ -78,7 +78,9 @@ class GeoNode:
 
     def __repr__(self):
         head_type = self.head_token.type if self.head_token else "None"
-        return f"GeoNode(line={self.line}, indent={self.indent_level}, head={head_type})"
+        return (
+            f"GeoNode(line={self.line}, indent={self.indent_level}, head={head_type})"
+        )
 
 
 class Parser:
@@ -87,7 +89,9 @@ class Parser:
     tokens: List[Token]
     root_nodes: List[GeoNode]
 
-    def __init__(self, source_or_tokens: Any = None, tokens: Optional[List[Token]] = None):
+    def __init__(
+        self, source_or_tokens: Any = None, tokens: Optional[List[Token]] = None
+    ):
         self.loop_depth = 0
 
         if isinstance(source_or_tokens, str):
@@ -202,7 +206,11 @@ class Parser:
                 continue
             if current_node is None:
                 current_node = GeoNode(
-                    line=token.line, indent_level=len(block_stack), raw_text="", head_token=token, tokens=[token]
+                    line=token.line,
+                    indent_level=len(block_stack),
+                    raw_text="",
+                    head_token=token,
+                    tokens=[token],
                 )
                 if block_stack:
                     parent = block_stack[-1]
@@ -291,7 +299,9 @@ class Parser:
                     else:
                         break
                 if always_body is not None:
-                    ast_nodes.append(TryAlways(try_body, catch_var, catch_body, always_body))
+                    ast_nodes.append(
+                        TryAlways(try_body, catch_var, catch_body, always_body)
+                    )
                 else:
                     ast_nodes.append(Try(try_body, catch_var, catch_body))
                 i = j
@@ -303,7 +313,9 @@ class Parser:
             i += 1
         return ast_nodes
 
-    def _set_node_loc(self, ast_node: Optional[Node], geo_node: GeoNode) -> Optional[Node]:
+    def _set_node_loc(
+        self, ast_node: Optional[Node], geo_node: GeoNode
+    ) -> Optional[Node]:
         """Helper to set location on an AST node from a GeoNode."""
         if not ast_node or not isinstance(ast_node, Node):
             return ast_node
@@ -460,7 +472,16 @@ class Parser:
             for k, tok in enumerate(node.tokens):
                 if tok.type != "NOISE" and first_non_noise_idx == -1:
                     first_non_noise_idx = k
-                if tok.type in ("ASSIGN", "IS", "BE", "PLUSEQ", "MINUSEQ", "MULEQ", "DIVEQ", "MODEQ"):
+                if tok.type in (
+                    "ASSIGN",
+                    "IS",
+                    "BE",
+                    "PLUSEQ",
+                    "MINUSEQ",
+                    "MULEQ",
+                    "DIVEQ",
+                    "MODEQ",
+                ):
                     assign_idx = k
                     break
 
@@ -468,7 +489,10 @@ class Parser:
                 is_real_assignment = False
                 if assign_idx == first_non_noise_idx + 1:
                     is_real_assignment = True
-                elif assign_idx == first_non_noise_idx + 2 and node.tokens[first_non_noise_idx].type == "MAKE":
+                elif (
+                    assign_idx == first_non_noise_idx + 2
+                    and node.tokens[first_non_noise_idx].type == "MAKE"
+                ):
                     is_real_assignment = True
                 elif (
                     assign_idx == first_non_noise_idx + 3
@@ -476,11 +500,17 @@ class Parser:
                     and node.tokens[first_non_noise_idx + 1].type == "AS"
                 ):
                     is_real_assignment = True
-                elif any(t.type in ("LBRACKET", "DOT") for t in node.tokens[first_non_noise_idx:assign_idx]):
+                elif any(
+                    t.type in ("LBRACKET", "DOT")
+                    for t in node.tokens[first_non_noise_idx:assign_idx]
+                ):
                     is_real_assignment = True
 
                 if is_real_assignment:
-                    if any(t.type in ("LBRACKET", "DOT") for t in node.tokens[first_non_noise_idx:assign_idx]):
+                    if any(
+                        t.type in ("LBRACKET", "DOT")
+                        for t in node.tokens[first_non_noise_idx:assign_idx]
+                    ):
                         ast_node = self.bind_complex_assignment(node, assign_idx)
                     else:
                         ast_node = self.bind_assignment(node)
@@ -507,7 +537,9 @@ class Parser:
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
-            raise SyntaxError(f"Missing condition for 'if' statement at line {node.line}")
+            raise SyntaxError(
+                f"Missing condition for 'if' statement at line {node.line}"
+            )
         body = self.bind_statement_list(node.children)
         return If(condition, body, None)
 
@@ -515,7 +547,9 @@ class Parser:
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
-            raise SyntaxError(f"Missing condition for 'unless' statement at line {node.line}")
+            raise SyntaxError(
+                f"Missing condition for 'unless' statement at line {node.line}"
+            )
         body = self.bind_statement_list(node.children)
         return If(UnaryOp("not", condition), body)
 
@@ -523,7 +557,9 @@ class Parser:
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
-            raise SyntaxError(f"Missing condition for 'until' statement at line {node.line}")
+            raise SyntaxError(
+                f"Missing condition for 'until' statement at line {node.line}"
+            )
         body = self.bind_statement_list(node.children)
         return While(UnaryOp("not", condition), body)
 
@@ -576,7 +612,9 @@ class Parser:
                         assign_idx = i
                         break
                 if assign_idx != -1:
-                    default_val = self.parse_expr_iterative(child.tokens[assign_idx + 1 :])
+                    default_val = self.parse_expr_iterative(
+                        child.tokens[assign_idx + 1 :]
+                    )
                 properties.append((prop_name, default_val))
             elif head == "TO" or head == "FUNCTION":
                 methods.append(self.bind_func(child))
@@ -586,7 +624,9 @@ class Parser:
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
-            raise SyntaxError(f"Missing condition for 'while' statement at line {node.line}")
+            raise SyntaxError(
+                f"Missing condition for 'while' statement at line {node.line}"
+            )
 
         self.loop_depth += 1
 
@@ -603,7 +643,9 @@ class Parser:
             expr_tokens.pop()
         count = self.parse_expr_iterative(expr_tokens)
         if count is None:
-            raise SyntaxError(f"Missing count for 'repeat' statement at line {node.line}")
+            raise SyntaxError(
+                f"Missing count for 'repeat' statement at line {node.line}"
+            )
 
         self.loop_depth += 1
 
@@ -647,7 +689,9 @@ class Parser:
                     e_tokens.pop()
                     count = self.parse_expr_iterative(e_tokens)
                     if count is None:
-                        raise SyntaxError(f"Missing count for 'loop' statement at line {node.line}")
+                        raise SyntaxError(
+                            f"Missing count for 'loop' statement at line {node.line}"
+                        )
                     self.loop_depth += 1
 
                     try:
@@ -664,7 +708,9 @@ class Parser:
             self.loop_depth -= 1
         if node.tokens[in_idx + 1].type == "RANGE":
             args_tokens = self._extract_expr_tokens(node.tokens, in_idx + 2)
-            filtered = [t for t in args_tokens if t.type not in ("LPAREN", "RPAREN", "COMMA")]
+            filtered = [
+                t for t in args_tokens if t.type not in ("LPAREN", "RPAREN", "COMMA")
+            ]
             range_args: List[Node] = []
             for t in filtered:
                 val: Optional[Node] = None
@@ -684,7 +730,9 @@ class Parser:
             iter_tokens = self._extract_expr_tokens(node.tokens, in_idx + 1)
             res_iter = self.parse_expr_iterative(iter_tokens)
             if res_iter is None:
-                raise SyntaxError(f"Missing iterable for 'for' loop at line {node.line}")
+                raise SyntaxError(
+                    f"Missing iterable for 'for' loop at line {node.line}"
+                )
             iterable = res_iter
         return ForIn(var_name, iterable, body)
 
@@ -694,20 +742,36 @@ class Parser:
         color = None
         i = 0
         if i < len(tokens) and tokens[i].type == "IN":
-            if i + 1 < len(tokens) and tokens[i + 1].type in ("RED", "GREEN", "BLUE", "YELLOW", "CYAN", "MAGENTA"):
+            if i + 1 < len(tokens) and tokens[i + 1].type in (
+                "RED",
+                "GREEN",
+                "BLUE",
+                "YELLOW",
+                "CYAN",
+                "MAGENTA",
+            ):
                 color = tokens[i + 1].value
                 i += 2
         if i < len(tokens) and tokens[i].type == "BOLD":
             style = "bold"
             i += 1
-        if i < len(tokens) and tokens[i].type in ("RED", "GREEN", "BLUE", "YELLOW", "CYAN", "MAGENTA"):
+        if i < len(tokens) and tokens[i].type in (
+            "RED",
+            "GREEN",
+            "BLUE",
+            "YELLOW",
+            "CYAN",
+            "MAGENTA",
+        ):
             color = tokens[i].value
             i += 1
 
         expr_tokens = self._extract_expr_tokens(tokens, start=i)
         expr = self.parse_expr_iterative(expr_tokens)
         if expr is None:
-            raise SyntaxError(f"Missing expression for 'say'/'print' at line {node.line}")
+            raise SyntaxError(
+                f"Missing expression for 'say'/'print' at line {node.line}"
+            )
         return Print(expr, style=style, color=color)
 
     def bind_return(self, node: GeoNode) -> Return:
@@ -726,7 +790,16 @@ class Parser:
         # Find assignment operator while ignoring noise
         assign_idx = -1
         for i, t in enumerate(tokens):
-            if t.type in ("ASSIGN", "IS", "BE", "PLUSEQ", "MINUSEQ", "MULEQ", "DIVEQ", "MODEQ"):
+            if t.type in (
+                "ASSIGN",
+                "IS",
+                "BE",
+                "PLUSEQ",
+                "MINUSEQ",
+                "MULEQ",
+                "DIVEQ",
+                "MODEQ",
+            ):
                 assign_idx = i
                 break
 
@@ -741,12 +814,18 @@ class Parser:
                 break
 
         if not name:
-            raise SyntaxError(f"LHS of assignment must contain an identifier at line {node.line}. Tokens: {tokens}")
+            raise SyntaxError(
+                f"LHS of assignment must contain an identifier at line {node.line}. Tokens: {tokens}"
+            )
 
         # Check for type hint: ID AS ID ASSIGN
         type_hint = None
         for i in range(assign_idx - 2):
-            if tokens[i].type == "ID" and tokens[i + 1].type == "AS" and tokens[i + 2].type == "ID":
+            if (
+                tokens[i].type == "ID"
+                and tokens[i + 1].type == "AS"
+                and tokens[i + 2].type == "ID"
+            ):
                 type_hint = tokens[i + 2].value.lower()
                 break
 
@@ -761,7 +840,13 @@ class Parser:
 
         op_tok = tokens[assign_idx]
         if op_tok.type in ("PLUSEQ", "MINUSEQ", "MULEQ", "DIVEQ", "MODEQ"):
-            op_map = {"PLUSEQ": "+", "MINUSEQ": "-", "MULEQ": "*", "DIVEQ": "/", "MODEQ": "%"}
+            op_map = {
+                "PLUSEQ": "+",
+                "MINUSEQ": "-",
+                "MULEQ": "*",
+                "DIVEQ": "/",
+                "MODEQ": "%",
+            }
             op_str = op_map[op_tok.type]
             left_node = VarAccess(name)
             if node.head_token is not None:
@@ -788,12 +873,16 @@ class Parser:
                 break
 
         if assign_idx == -1:
-            raise SyntaxError(f"Assignment operator missing in constant assignment at line {node.line}")
+            raise SyntaxError(
+                f"Assignment operator missing in constant assignment at line {node.line}"
+            )
 
         expr_tokens = tokens[assign_idx + 1 :]
         value = self.parse_expr_iterative(expr_tokens)
         if value is None:
-            raise SyntaxError(f"Missing value for constant '{name}' at line {node.line}")
+            raise SyntaxError(
+                f"Missing value for constant '{name}' at line {node.line}"
+            )
         return ConstAssign(name, value)
 
     def bind_complex_assignment(self, node: GeoNode, assign_idx: int) -> Node:
@@ -805,11 +894,19 @@ class Parser:
         if lhs_expr is None:
             raise SyntaxError(f"Invalid LHS for complex assignment at line {node.line}")
         if value_expr is None:
-            raise SyntaxError(f"Missing value for complex assignment at line {node.line}")
+            raise SyntaxError(
+                f"Missing value for complex assignment at line {node.line}"
+            )
 
         op_tok = node.tokens[assign_idx]
         if op_tok.type in ("PLUSEQ", "MINUSEQ", "MULEQ", "DIVEQ", "MODEQ"):
-            op_map = {"PLUSEQ": "+", "MINUSEQ": "-", "MULEQ": "*", "DIVEQ": "/", "MODEQ": "%"}
+            op_map = {
+                "PLUSEQ": "+",
+                "MINUSEQ": "-",
+                "MULEQ": "*",
+                "DIVEQ": "/",
+                "MODEQ": "%",
+            }
             op_str = op_map[op_tok.type]
             value_expr = BinOp(lhs_expr, op_str, value_expr)
             value_expr.line = op_tok.line
@@ -819,8 +916,16 @@ class Parser:
             return IndexAssign(lhs_expr.obj, lhs_expr.index, value_expr)
         if isinstance(lhs_expr, BinOp) and lhs_expr.op == ".":
             # self.source -> BinOp(left=VarAccess(self), op='.', right=VarAccess(source))
-            instance_name = lhs_expr.left.name if hasattr(lhs_expr.left, "name") else str(lhs_expr.left)
-            property_name = lhs_expr.right.name if hasattr(lhs_expr.right, "name") else str(lhs_expr.right)
+            instance_name = (
+                lhs_expr.left.name
+                if hasattr(lhs_expr.left, "name")
+                else str(lhs_expr.left)
+            )
+            property_name = (
+                lhs_expr.right.name
+                if hasattr(lhs_expr.right, "name")
+                else str(lhs_expr.right)
+            )
             return PropertyAssign(instance_name, property_name, value_expr)
 
         return Assign(str(lhs_expr), value_expr)
@@ -883,12 +988,16 @@ class Parser:
             if head == "READ":
                 res_r = self.parse_expr_iterative(tokens[1:])
                 if res_r is None:
-                    raise SyntaxError(f"Missing path for 'read' statement at line {node.line}")
+                    raise SyntaxError(
+                        f"Missing path for 'read' statement at line {node.line}"
+                    )
                 return Call("std_io_read", [res_r])
 
             res_c = self.parse_expr_iterative([tokens[1]])
             if res_c is None:
-                raise SyntaxError(f"Missing content for '{op}' statement at line {node.line}")
+                raise SyntaxError(
+                    f"Missing content for '{op}' statement at line {node.line}"
+                )
             content = res_c
             target_path: Node = String("output.txt")
             for i, t in enumerate(tokens):
@@ -901,13 +1010,17 @@ class Parser:
         if head == "ERROR":
             res_e = self.parse_expr_iterative(tokens[1:])
             if res_e is None:
-                raise SyntaxError(f"Missing message for 'error' statement at line {node.line}")
+                raise SyntaxError(
+                    f"Missing message for 'error' statement at line {node.line}"
+                )
             return Throw(res_e)
 
         if head == "EXECUTE":
             res_ex = self.parse_expr_iterative(tokens[1:])
             if res_ex is None:
-                raise SyntaxError(f"Missing command for 'execute' statement at line {node.line}")
+                raise SyntaxError(
+                    f"Missing command for 'execute' statement at line {node.line}"
+                )
             return Execute(res_ex)
 
         if head == "MODEL":
@@ -946,7 +1059,9 @@ class Parser:
             expr_tokens.pop(0)
         port = self.parse_expr_iterative(expr_tokens)
         if port is None:
-            raise SyntaxError(f"Missing port for 'listen' statement at line {node.line}")
+            raise SyntaxError(
+                f"Missing port for 'listen' statement at line {node.line}"
+            )
         return Listen(port)
 
     def bind_func(self, node: GeoNode) -> FunctionDef:
@@ -964,10 +1079,24 @@ class Parser:
                 continue
             if t.type == "COLON":
                 break
-            if t.type in ("ID", "FOLDER", "FILE", "PORT", "SERVER", "NAME", "TYPE", "VALUE", "CONTENT"):
+            if t.type in (
+                "ID",
+                "FOLDER",
+                "FILE",
+                "PORT",
+                "SERVER",
+                "NAME",
+                "TYPE",
+                "VALUE",
+                "CONTENT",
+            ):
                 arg_name = t.value
                 # Check for `arg as type` pattern
-                if i + 2 < len(token_slice) and token_slice[i + 1].type == "AS" and token_slice[i + 2].type == "ID":
+                if (
+                    i + 2 < len(token_slice)
+                    and token_slice[i + 1].type == "AS"
+                    and token_slice[i + 2].type == "ID"
+                ):
                     type_hint = token_slice[i + 2].value.lower()
                     args.append((arg_name, None, type_hint))
                     i += 3
@@ -992,7 +1121,9 @@ class Parser:
             var_name = tokens[1].value
             val = self.parse_expr_iterative(tokens[by_idx + 1 :])
             if val is None:
-                raise SyntaxError(f"Missing value for '{head}' statement at line {node.line}")
+                raise SyntaxError(
+                    f"Missing value for '{head}' statement at line {node.line}"
+                )
             op = "+" if head == "INCREMENT" else "-"
             return Assign(var_name, BinOp(VarAccess(var_name), op, val))
 
@@ -1027,12 +1158,16 @@ class Parser:
 
     def bind_stop(self, node: GeoNode) -> Stop:
         if self.loop_depth <= 0:
-            raise SyntaxError(f"'Stop' statement used outside a Loop at line {node.line}")
+            raise SyntaxError(
+                f"'Stop' statement used outside a Loop at line {node.line}"
+            )
         return Stop()
 
     def bind_skip(self, node: GeoNode) -> Skip:
         if self.loop_depth <= 0:
-            raise SyntaxError(f"'Skip' statement used outside a Loop at line {node.line}")
+            raise SyntaxError(
+                f"'Skip' statement used outside a Loop at line {node.line}"
+            )
         return Skip()
 
     def bind_spawn(self, node: GeoNode) -> Spawn:
@@ -1089,7 +1224,9 @@ class Parser:
         return self.bind_node(node)  # type: ignore
 
     def bind_middleware(self, node: GeoNode) -> OnRequest:
-        return OnRequest(String("__middleware__"), self.bind_statement_list(node.children))
+        return OnRequest(
+            String("__middleware__"), self.bind_statement_list(node.children)
+        )
 
     def bind_use(self, node: GeoNode) -> Node:
         return self.bind_import_enhanced(node)
@@ -1125,7 +1262,11 @@ class Parser:
                 if t.type == "ID":
                     name = t.value
                     alias = None
-                    if i + 2 < len(name_tokens) and name_tokens[i + 1].type == "AS" and name_tokens[i + 2].type == "ID":
+                    if (
+                        i + 2 < len(name_tokens)
+                        and name_tokens[i + 1].type == "AS"
+                        and name_tokens[i + 2].type == "ID"
+                    ):
                         alias = name_tokens[i + 2].value
                         i += 3
                     else:
@@ -1195,7 +1336,9 @@ class Parser:
         if to_idx == -1:
             left_res = self.parse_expr_iterative(tokens[1:])
             if left_res is None:
-                raise SyntaxError(f"Missing expression for assertion at line {node.line}")
+                raise SyntaxError(
+                    f"Missing expression for assertion at line {node.line}"
+                )
             return Assertion(left_res, "truthy", None)
 
         left_tokens = tokens[1:to_idx]
@@ -1230,7 +1373,9 @@ class Parser:
     def bind_send(self, node: GeoNode) -> Send:
         tokens = node.tokens[1:]
         if len(tokens) < 2:
-            raise SyntaxError(f"send requires a channel and a value at line {node.line}")
+            raise SyntaxError(
+                f"send requires a channel and a value at line {node.line}"
+            )
         channel = self.parse_expr_iterative([tokens[0]])
         value = self.parse_expr_iterative(tokens[1:])
         if channel is None or value is None:
@@ -1278,7 +1423,9 @@ class Parser:
             expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
             match_expr = self.parse_expr_iterative(expr_tokens)
             if match_expr is None:
-                raise SyntaxError(f"Missing expression for 'when' match at line {node.line}")
+                raise SyntaxError(
+                    f"Missing expression for 'when' match at line {node.line}"
+                )
             cases: List[tuple[Node, List[Node]]] = []
             default_case: Optional[List[Node]] = None
 
@@ -1290,7 +1437,9 @@ class Parser:
                     case_expr_tokens = self._extract_expr_tokens(child.tokens, start=1)
                     case_expr = self.parse_expr_iterative(case_expr_tokens)
                     if case_expr is None:
-                        raise SyntaxError(f"Missing case expression at line {child.line}")
+                        raise SyntaxError(
+                            f"Missing case expression at line {child.line}"
+                        )
                     case_body = self.bind_statement_list(child.children)
                     cases.append((case_expr, case_body))
                 elif child_head.type == "OTHERWISE":
@@ -1352,14 +1501,22 @@ class Parser:
                     "METHOD",
                     "ACTION",
                 )
-                is_kwarg = is_attr_key and i + 2 < len(tokens) and tokens[i + 1].type == "ASSIGN"
+                is_kwarg = (
+                    is_attr_key
+                    and i + 2 < len(tokens)
+                    and tokens[i + 1].type == "ASSIGN"
+                )
                 if is_kwarg:
                     key = t.value
                     val_token = tokens[i + 2]
                     if val_token.type == "STRING":
                         kwargs.append((key, String(val_token.value)))
                     elif val_token.type == "NUMBER":
-                        val_num: Node = Number(int(val_token.value) if "." not in val_token.value else float(val_token.value))
+                        val_num: Node = Number(
+                            int(val_token.value)
+                            if "." not in val_token.value
+                            else float(val_token.value)
+                        )
                         kwargs.append((key, val_num))
                     else:
                         kwargs.append((key, VarAccess(val_token.value)))
@@ -1368,7 +1525,9 @@ class Parser:
                 elif t.type == "STRING":
                     args.append(String(t.value))
                 elif t.type == "NUMBER":
-                    val_num = Number(int(t.value) if "." not in t.value else float(t.value))
+                    val_num = Number(
+                        int(t.value) if "." not in t.value else float(t.value)
+                    )
                     args.append(val_num)
                 elif t.type == "ID":
                     args.append(VarAccess(t.value))
@@ -1388,7 +1547,9 @@ class Parser:
             end -= 1
         return tokens[start:end]
 
-    def parse_expr_iterative(self, tokens: List[Token], children: Optional[List[GeoNode]] = None) -> Optional[Node]:
+    def parse_expr_iterative(
+        self, tokens: List[Token], children: Optional[List[GeoNode]] = None
+    ) -> Optional[Node]:
         if not tokens:
             return None
 
@@ -1428,7 +1589,9 @@ class Parser:
                     op_str = "not" if op_type == "NOT" else "-"
                     values.append(UnaryOp(op_str, right))
                 else:
-                    raise SyntaxError(f"Invalid expression: missing operand for unary {op_type}")
+                    raise SyntaxError(
+                        f"Invalid expression: missing operand for unary {op_type}"
+                    )
             elif len(values) >= 2:
                 right = values.pop()
                 left = values.pop()
@@ -1454,7 +1617,9 @@ class Parser:
                 op_str = op_map.get(op_type, op_type)
                 values.append(BinOp(left, op_str, right))
             else:
-                print(f"DEBUG: missing operands for {op_type}, values={values}, ops={ops}")
+                print(
+                    f"DEBUG: missing operands for {op_type}, values={values}, ops={ops}"
+                )
                 raise SyntaxError(f"Invalid expression: missing operands for {op_type}")
 
         def get_precedence(op_type):
@@ -1506,7 +1671,9 @@ class Parser:
                 i += 1
                 continue
             if t.type == "NUMBER":
-                val_node: Node = Number(int(t.value) if "." not in t.value else float(t.value))
+                val_node: Node = Number(
+                    int(t.value) if "." not in t.value else float(t.value)
+                )
                 val_node.line = t.line
                 val_node.col = t.column
                 val_node.end_line = t.line
@@ -1528,7 +1695,12 @@ class Parser:
                 values.append(val_node)
             elif t.type == "LBRACKET":
                 is_indexing = False
-                if i > 0 and tokens[i - 1].type in ("ID", "RBRACKET", "RPAREN", "STRING"):
+                if i > 0 and tokens[i - 1].type in (
+                    "ID",
+                    "RBRACKET",
+                    "RPAREN",
+                    "STRING",
+                ):
                     is_indexing = True
 
                 if is_indexing:
@@ -1579,7 +1751,9 @@ class Parser:
                     start_expr = self.parse_expr_iterative(elem[:to_idx], children)
                     end_expr = self.parse_expr_iterative(elem[to_idx + 1 :], children)
                     if start_expr is None or end_expr is None:
-                        raise SyntaxError(f"Malformed range expression in brackets at line {t.line}")
+                        raise SyntaxError(
+                            f"Malformed range expression in brackets at line {t.line}"
+                        )
                     node_call = Call("list", [Call("range", [start_expr, end_expr])])
                     node_call.line = t.line
                     node_call.col = t.column
@@ -1595,7 +1769,9 @@ class Parser:
 
                 if is_indexing:
                     if not values:
-                        raise SyntaxError(f"Unexpected index access without object at line {t.line}")
+                        raise SyntaxError(
+                            f"Unexpected index access without object at line {t.line}"
+                        )
                     obj = values.pop()
 
                     slice_parts: List[List[Token]] = []
@@ -1637,9 +1813,15 @@ class Parser:
 
                         node_idx = IndexAccess(obj, slice_node)
                     else:
-                        idx_expr = self.parse_expr_iterative(current_elem, children) if current_elem else None
+                        idx_expr = (
+                            self.parse_expr_iterative(current_elem, children)
+                            if current_elem
+                            else None
+                        )
                         if idx_expr is None:
-                            raise SyntaxError(f"Missing index expression at line {t.line}")
+                            raise SyntaxError(
+                                f"Missing index expression at line {t.line}"
+                            )
                         node_idx = IndexAccess(obj, idx_expr)
 
                     node_idx.line = t.line
@@ -1677,7 +1859,12 @@ class Parser:
                         if current_pair:
                             pairs_tokens.append(current_pair)
                         break
-                    if tokens[j].type == "COMMA" and depth == 1 and bracket_depth == 0 and paren_depth == 0:
+                    if (
+                        tokens[j].type == "COMMA"
+                        and depth == 1
+                        and bracket_depth == 0
+                        and paren_depth == 0
+                    ):
                         pairs_tokens.append(current_pair)
                         current_pair = []
                     else:
@@ -1704,7 +1891,11 @@ class Parser:
 
                 values.append(Dictionary(pairs))
                 i = j
-            elif t.type == "ASK" and i + 1 < len(tokens) and tokens[i + 1].type == "STRING":
+            elif (
+                t.type == "ASK"
+                and i + 1 < len(tokens)
+                and tokens[i + 1].type == "STRING"
+            ):
                 values.append(Call("ask", [String(tokens[i + 1].value)]))
                 i += 2
                 continue
@@ -1736,7 +1927,13 @@ class Parser:
                 values.append(self._parse_lerp(tokens, i))
                 break
             elif t.type == "FIND":
-                tmp_node = GeoNode(head_token=t, line=t.line, indent_level=0, tokens=tokens[i:], children=[])
+                tmp_node = GeoNode(
+                    head_token=t,
+                    line=t.line,
+                    indent_level=0,
+                    tokens=tokens[i:],
+                    children=[],
+                )
                 values.append(self.bind_dsl_lowering(tmp_node))
                 break
             elif t.type == "PARALLEL":
@@ -1745,21 +1942,36 @@ class Parser:
                 else:
                     values.append(Parallel([]))
                 break
-            elif t.type == "ID" and t.value.lower() == "sum" and i + 1 < len(tokens) and tokens[i + 1].type == "OF":
+            elif (
+                t.type == "ID"
+                and t.value.lower() == "sum"
+                and i + 1 < len(tokens)
+                and tokens[i + 1].type == "OF"
+            ):
                 res_sum = self.parse_expr_iterative(tokens[i + 2 :], children)
                 if res_sum is None:
-                    raise SyntaxError(f"Missing expression for 'sum of' at line {t.line}")
+                    raise SyntaxError(
+                        f"Missing expression for 'sum of' at line {t.line}"
+                    )
                 values.append(Call("sum", [res_sum]))
                 break
-            elif t.type == "ID" and i + 1 < len(tokens) and tokens[i + 1].type == "FROM":
+            elif (
+                t.type == "ID" and i + 1 < len(tokens) and tokens[i + 1].type == "FROM"
+            ):
                 values.append(self._parse_comprehension(tokens, i, t, children))
                 break
             elif (
-                (t.type == "ID" and t.value.lower() in ("split", "len", "length", "count")) or t.type in ("UPPER", "LOWER")
+                (
+                    t.type == "ID"
+                    and t.value.lower() in ("split", "len", "length", "count")
+                )
+                or t.type in ("UPPER", "LOWER")
             ) and (i + 1 >= len(tokens) or tokens[i + 1].type != "LPAREN"):
                 values.append(self._parse_unparenthesized_fn(tokens, i, t, children))
                 break
-            elif t.type == "READ" and (i + 1 >= len(tokens) or tokens[i + 1].type != "LPAREN"):
+            elif t.type == "READ" and (
+                i + 1 >= len(tokens) or tokens[i + 1].type != "LPAREN"
+            ):
                 res_read = self.parse_expr_iterative(tokens[i + 1 :], children)
                 if res_read is None:
                     raise SyntaxError(f"Missing path for 'read' at line {t.line}")
@@ -1825,20 +2037,33 @@ class Parser:
                 if ops:
                     ops.pop()
             elif t.type in self.precedence:
-                while ops and ops[-1] != "LPAREN" and get_precedence(ops[-1]) >= get_precedence(t.type):
+                while (
+                    ops
+                    and ops[-1] != "LPAREN"
+                    and get_precedence(ops[-1]) >= get_precedence(t.type)
+                ):
                     apply_op()
                 ops.append(t.type)
             i += 1
         while ops:
             apply_op()
         if len(values) > 1:
-            raise SyntaxError(f"Invalid expression: too many operands. Tokens: {tokens}, Values: {values}")
+            raise SyntaxError(
+                f"Invalid expression: too many operands. Tokens: {tokens}, Values: {values}"
+            )
         return values[0] if values else None
 
-    def _parse_natural_list_or_set_or_dict(self, tokens: List[Token], i: int) -> tuple[int, Optional[Node]]:
+    def _parse_natural_list_or_set_or_dict(
+        self, tokens: List[Token], i: int
+    ) -> tuple[int, Optional[Node]]:
         t = tokens[i]
         # Match "a list of ..." or "a list"
-        if t.type == "ID" and t.value.lower() == "a" and i + 1 < len(tokens) and tokens[i + 1].type == "LIST":
+        if (
+            t.type == "ID"
+            and t.value.lower() == "a"
+            and i + 1 < len(tokens)
+            and tokens[i + 1].type == "LIST"
+        ):
             if i + 2 < len(tokens) and tokens[i + 2].type == "OF":
                 j = i + 3
                 elements_tokens: List[List[Token]] = []
@@ -1932,7 +2157,12 @@ class Parser:
             return j, ListVal(items)
 
         # Match "unique set of ..."
-        if t.type == "UNIQUE" and i + 2 < len(tokens) and tokens[i + 1].type == "SET" and tokens[i + 2].type == "OF":
+        if (
+            t.type == "UNIQUE"
+            and i + 2 < len(tokens)
+            and tokens[i + 1].type == "SET"
+            and tokens[i + 2].type == "OF"
+        ):
             j = i + 3
             elements_tokens = []
             current_elem = []
@@ -1979,10 +2209,14 @@ class Parser:
             min_res = self.parse_expr_iterative(tokens[bet_idx + 1 : and_idx])
             max_res = self.parse_expr_iterative(tokens[and_idx + 1 :])
             if val_res is None or min_res is None or max_res is None:
-                raise SyntaxError(f"Malformed 'clamped' expression at line {tokens[i - 1].line}")
+                raise SyntaxError(
+                    f"Malformed 'clamped' expression at line {tokens[i - 1].line}"
+                )
             return ClampNode(val_res, min_res, max_res)
         else:
-            raise SyntaxError(f"Malformed 'clamped' expression at line {tokens[i - 1].line}")
+            raise SyntaxError(
+                f"Malformed 'clamped' expression at line {tokens[i - 1].line}"
+            )
 
     def _parse_lerp(self, tokens: List[Token], i: int) -> LerpNode:
         i += 1
@@ -2008,7 +2242,9 @@ class Parser:
             b_res = self.parse_expr_iterative(tokens[to_idx + 1 : by_idx])
             t_res = self.parse_expr_iterative(tokens[by_idx + 1 :])
             if a_res is None or b_res is None or t_res is None:
-                raise SyntaxError(f"Malformed 'lerp' expression at line {tokens[i - 1].line}")
+                raise SyntaxError(
+                    f"Malformed 'lerp' expression at line {tokens[i - 1].line}"
+                )
             return LerpNode(a_res, b_res, t_res)
         else:
             to_idx = -1
@@ -2024,11 +2260,17 @@ class Parser:
                 b_res = self.parse_expr_iterative(tokens[to_idx + 1 : by_idx])
                 t_res = self.parse_expr_iterative(tokens[by_idx + 1 :])
                 if a_res is None or b_res is None or t_res is None:
-                    raise SyntaxError(f"Malformed 'lerp' expression at line {tokens[i - 1].line}")
+                    raise SyntaxError(
+                        f"Malformed 'lerp' expression at line {tokens[i - 1].line}"
+                    )
                 return LerpNode(a_res, b_res, t_res)
-            raise SyntaxError(f"Malformed 'lerp' expression at line {tokens[i - 1].line}")
+            raise SyntaxError(
+                f"Malformed 'lerp' expression at line {tokens[i - 1].line}"
+            )
 
-    def _parse_min_max(self, tokens: List[Token], i: int, t_type: str) -> Union[MaxNode, MinNode]:
+    def _parse_min_max(
+        self, tokens: List[Token], i: int, t_type: str
+    ) -> Union[MaxNode, MinNode]:
         node_class: Any = MaxNode if t_type == "MAX" else MinNode
         i += 1
         if i < len(tokens) and tokens[i].type == "OF":
@@ -2051,13 +2293,17 @@ class Parser:
             left_expr = self.parse_expr_iterative(left_tokens)
             right_expr = self.parse_expr_iterative(right_tokens)
             if left_expr is None or right_expr is None:
-                raise SyntaxError(f"Malformed {t_type} expression at line {tokens[i - 1].line}")
+                raise SyntaxError(
+                    f"Malformed {t_type} expression at line {tokens[i - 1].line}"
+                )
             return node_class(left_expr, right_expr)
         else:
             inner_tokens = tokens[i:]
             expr_node = self.parse_expr_iterative(inner_tokens)
             if expr_node is None:
-                raise SyntaxError(f"Missing expression for {t_type} at line {tokens[i - 1].line}")
+                raise SyntaxError(
+                    f"Missing expression for {t_type} at line {tokens[i - 1].line}"
+                )
             return node_class(expr_node, None)
 
     def _parse_comprehension(
@@ -2070,28 +2316,44 @@ class Parser:
         for k in range(from_idx, len(tokens)):
             if tokens[k].type == "TO":
                 to_idx = k
-            elif tokens[k].type in ("WHEN", "THAT") or (tokens[k].type == "ID" and tokens[k].value.lower() == "that"):
+            elif tokens[k].type in ("WHEN", "THAT") or (
+                tokens[k].type == "ID" and tokens[k].value.lower() == "that"
+            ):
                 when_idx = k
                 break
 
         if to_idx != -1:
-            start_expr = self.parse_expr_iterative(tokens[from_idx + 1 : to_idx], children)
-            end_expr_tokens = tokens[to_idx + 1 : when_idx] if when_idx != -1 else tokens[to_idx + 1 :]
+            start_expr = self.parse_expr_iterative(
+                tokens[from_idx + 1 : to_idx], children
+            )
+            end_expr_tokens = (
+                tokens[to_idx + 1 : when_idx]
+                if when_idx != -1
+                else tokens[to_idx + 1 :]
+            )
             end_expr = self.parse_expr_iterative(end_expr_tokens, children)
             if start_expr is None or end_expr is None:
-                raise SyntaxError(f"Malformed list comprehension range at line {t.line}")
+                raise SyntaxError(
+                    f"Malformed list comprehension range at line {t.line}"
+                )
             iterable = Call("range", [start_expr, end_expr])
 
             condition = None
             if when_idx != -1:
                 cond_start = when_idx + 1
-                if cond_start < len(tokens) and tokens[cond_start].type == "ID" and tokens[cond_start].value.lower() == "are":
+                if (
+                    cond_start < len(tokens)
+                    and tokens[cond_start].type == "ID"
+                    and tokens[cond_start].value.lower() == "are"
+                ):
                     cond_start += 1
                 condition = self.parse_expr_iterative(tokens[cond_start:], children)
             return ListComprehension(VarAccess(var_name), var_name, iterable, condition)
         raise SyntaxError(f"Malformed list comprehension at line {t.line}")
 
-    def _parse_unparenthesized_fn(self, tokens: List[Token], i: int, t: Token, children: Optional[List[GeoNode]]) -> Call:
+    def _parse_unparenthesized_fn(
+        self, tokens: List[Token], i: int, t: Token, children: Optional[List[GeoNode]]
+    ) -> Call:
         func_name = t.value.lower()
         i += 1
         only_letters = False
@@ -2111,7 +2373,9 @@ class Parser:
         expr_tokens = tokens[i:only_idx] if only_idx != -1 else tokens[i:]
         expr = self.parse_expr_iterative(expr_tokens, children)
         if expr is None:
-            raise SyntaxError(f"Missing expression for function '{func_name}' at line {t.line}")
+            raise SyntaxError(
+                f"Missing expression for function '{func_name}' at line {t.line}"
+            )
 
         args = [expr]
         kwargs: List[tuple[str, Node]] = []
@@ -2120,7 +2384,9 @@ class Parser:
 
         return Call(func_name, args, kwargs=kwargs)
 
-    def _parse_id_or_call(self, tokens: List[Token], i: int, t: Token) -> tuple[int, Node]:
+    def _parse_id_or_call(
+        self, tokens: List[Token], i: int, t: Token
+    ) -> tuple[int, Node]:
         name = t.value
         if i + 1 < len(tokens) and tokens[i + 1].type == "LPAREN":
             depth = 1
@@ -2152,7 +2418,11 @@ class Parser:
                 for elem in elements_tokens:
                     if not elem:
                         continue
-                    is_kw = len(elem) >= 2 and elem[0].type == "ID" and elem[1].type == "ASSIGN"
+                    is_kw = (
+                        len(elem) >= 2
+                        and elem[0].type == "ID"
+                        and elem[1].type == "ASSIGN"
+                    )
                     if is_kw:
                         key = elem[0].value
                         val = self.parse_expr_iterative(elem[2:], [])
@@ -2165,13 +2435,26 @@ class Parser:
                 return j, Call(name, args, kwargs=kwargs)
 
         # Check for unparenthesized builtin call (greedy single argument)
-        if name.lower() in ("str", "int", "float", "bool", "len", "typeof", "char", "ord"):
+        if name.lower() in (
+            "str",
+            "int",
+            "float",
+            "bool",
+            "len",
+            "typeof",
+            "char",
+            "ord",
+        ):
             if i + 1 < len(tokens):
                 next_t = tokens[i + 1]
                 if next_t.type in ("ID", "NUMBER", "STRING", "YES", "NO", "NULL"):
                     arg_node: Node
                     if next_t.type == "NUMBER":
-                        arg_node = Number(int(next_t.value) if "." not in next_t.value else float(next_t.value))
+                        arg_node = Number(
+                            int(next_t.value)
+                            if "." not in next_t.value
+                            else float(next_t.value)
+                        )
                     elif next_t.type == "STRING":
                         arg_node = String(next_t.value)
                     elif next_t.type in ("YES", "NO"):

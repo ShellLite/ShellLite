@@ -17,13 +17,17 @@ def is_admin():
 def add_to_path(folder_path):
     folder_path = str(folder_path)
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_ALL_ACCESS)
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_ALL_ACCESS
+        )
         try:
             path_val, _ = winreg.QueryValueEx(key, "Path")
         except FileNotFoundError:
             path_val = ""
         if folder_path not in path_val:
-            new_path = path_val + ";" + folder_path + ";" if path_val else folder_path + ";"
+            new_path = (
+                path_val + ";" + folder_path + ";" if path_val else folder_path + ";"
+            )
             winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_path)
             print(f"Added {folder_path} to User PATH.")
         else:

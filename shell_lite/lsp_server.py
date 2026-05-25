@@ -154,7 +154,9 @@ class ShellLiteDocument:
 
         logger.debug(f"Parsed {len(self.ast_nodes)} nodes")
         for n in self.ast_nodes:
-            logger.debug(f" - Node: {type(n).__name__} line={n.line} col={n.col} end={n.end_line}:{n.end_col}")
+            logger.debug(
+                f" - Node: {type(n).__name__} line={n.line} col={n.col} end={n.end_line}:{n.end_col}"
+            )
 
         self._collect_symbols_and_semantic_checks()
 
@@ -233,7 +235,9 @@ class ShellLiteDocument:
 
             formatted_lines.append("    " * indent_level + stripped)
 
-            if stripped.strip().endswith(":") or stripped.startswith(("if ", "while ", "for ", "to ", "thing ", "test ")):
+            if stripped.strip().endswith(":") or stripped.startswith(
+                ("if ", "while ", "for ", "to ", "thing ", "test ")
+            ):
                 if not stripped.startswith(("end", "give", "return", "stop", "skip")):
                     indent_level += 1
 
@@ -243,7 +247,10 @@ class ShellLiteDocument:
 
         return [
             {
-                "range": {"start": {"line": 0, "character": 0}, "end": {"line": len(self.lines), "character": 0}},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": len(self.lines), "character": 0},
+                },
                 "newText": new_text,
             }
         ]
@@ -279,13 +286,20 @@ class LSPServer:
         stream.flush()
 
     def _notify(self, method: str, params: Any):
-        self._write_message(sys.stdout.buffer, {"jsonrpc": "2.0", "method": method, "params": params})
+        self._write_message(
+            sys.stdout.buffer, {"jsonrpc": "2.0", "method": method, "params": params}
+        )
 
     def _respond(self, req_id: Any, result: Any):
-        self._write_message(sys.stdout.buffer, {"jsonrpc": "2.0", "id": req_id, "result": result})
+        self._write_message(
+            sys.stdout.buffer, {"jsonrpc": "2.0", "id": req_id, "result": result}
+        )
 
     def _publish_diagnostics(self, doc: ShellLiteDocument):
-        self._notify("textDocument/publishDiagnostics", {"uri": doc.uri, "diagnostics": doc.diagnostics})
+        self._notify(
+            "textDocument/publishDiagnostics",
+            {"uri": doc.uri, "diagnostics": doc.diagnostics},
+        )
 
     def run(self):
         stdin = sys.stdin.buffer
@@ -320,7 +334,10 @@ class LSPServer:
                         "renameProvider": True,
                         "referencesProvider": True,
                     },
-                    "serverInfo": {"name": "ShellLite Enhanced LSP", "version": "0.6.1.1"},
+                    "serverInfo": {
+                        "name": "ShellLite Enhanced LSP",
+                        "version": "0.6.1.1",
+                    },
                 },
             )
         elif method == "textDocument/didOpen":
@@ -359,7 +376,9 @@ class LSPServer:
         elif method == "exit":
             self._running = False
 
-    def _find_node_at(self, doc: ShellLiteDocument, line: int, char: int) -> Optional[Node]:
+    def _find_node_at(
+        self, doc: ShellLiteDocument, line: int, char: int
+    ) -> Optional[Node]:
         best_node = None
         min_width = 999999
 
@@ -391,7 +410,15 @@ class LSPServer:
                             f"Found candidate node: {type(node).__name__} at {start_l}:{start_c}-{end_l}:{end_c} width={width}"
                         )
 
-                for attr in ["body", "else_body", "expression", "value", "condition", "args", "elements"]:
+                for attr in [
+                    "body",
+                    "else_body",
+                    "expression",
+                    "value",
+                    "condition",
+                    "args",
+                    "elements",
+                ]:
                     child = getattr(node, attr, None)
                     if isinstance(child, list):
                         walk(child)
@@ -412,12 +439,22 @@ class LSPServer:
         if not node:
             word = self._get_word_at(doc, pos["line"], pos["character"])
             if word in _KEYWORDS:
-                return self._respond(req_id, {"contents": {"kind": "markdown", "value": f"**keyword** `{word}`"}})
+                return self._respond(
+                    req_id,
+                    {
+                        "contents": {
+                            "kind": "markdown",
+                            "value": f"**keyword** `{word}`",
+                        }
+                    },
+                )
             return self._respond(req_id, None)
 
         content = ""
         if isinstance(node, FunctionDef):
-            args_str = ", ".join([f"{a[0]}" + (f" as {a[2]}" if a[2] else "") for a in node.args])
+            args_str = ", ".join(
+                [f"{a[0]}" + (f" as {a[2]}" if a[2] else "") for a in node.args]
+            )
             content = f"**function** `{node.name}({args_str})`"
         elif isinstance(node, Assign):
             content = f"**variable** `{node.name}`"
@@ -485,7 +522,9 @@ class LSPServer:
             f"Rename request at {pos['line']}:{pos['character']} found node: {type(node).__name__ if node else 'None'}"
         )
 
-        old_name = getattr(node, "name", None) or (node.name if isinstance(node, VarAccess) else None)
+        old_name = getattr(node, "name", None) or (
+            node.name if isinstance(node, VarAccess) else None
+        )
         logger.debug(f"Old name identified: {old_name}")
 
         if not old_name:
@@ -496,19 +535,35 @@ class LSPServer:
         def walk(nodes):
             for n in nodes:
                 if (
-                    isinstance(n, (Assign, TypedAssign, FunctionDef, ClassDef, VarAccess))
+                    isinstance(
+                        n, (Assign, TypedAssign, FunctionDef, ClassDef, VarAccess)
+                    )
                     and getattr(n, "name", None) == old_name
                 ):
                     edits.append(
                         {
                             "range": {
-                                "start": {"line": n.line - 1, "character": max(n.col - 1, 0)},
-                                "end": {"line": n.line - 1, "character": max(n.col - 1 + len(old_name), 0)},
+                                "start": {
+                                    "line": n.line - 1,
+                                    "character": max(n.col - 1, 0),
+                                },
+                                "end": {
+                                    "line": n.line - 1,
+                                    "character": max(n.col - 1 + len(old_name), 0),
+                                },
                             },
                             "newText": new_name,
                         }
                     )
-                for attr in ["body", "else_body", "expression", "value", "condition", "args", "elements"]:
+                for attr in [
+                    "body",
+                    "else_body",
+                    "expression",
+                    "value",
+                    "condition",
+                    "args",
+                    "elements",
+                ]:
                     child = getattr(n, attr, None)
                     if isinstance(child, list):
                         walk(child)
@@ -526,7 +581,9 @@ class LSPServer:
             return self._respond(req_id, None)
 
         node = self._find_node_at(doc, pos["line"], pos["character"])
-        name = getattr(node, "name", None) or (node.name if isinstance(node, VarAccess) else None)
+        name = getattr(node, "name", None) or (
+            node.name if isinstance(node, VarAccess) else None
+        )
         if not name:
             return self._respond(req_id, None)
 
@@ -534,17 +591,36 @@ class LSPServer:
 
         def walk(nodes):
             for n in nodes:
-                if isinstance(n, (Assign, TypedAssign, FunctionDef, ClassDef, VarAccess)) and getattr(n, "name", None) == name:
+                if (
+                    isinstance(
+                        n, (Assign, TypedAssign, FunctionDef, ClassDef, VarAccess)
+                    )
+                    and getattr(n, "name", None) == name
+                ):
                     refs.append(
                         {
                             "uri": uri,
                             "range": {
-                                "start": {"line": n.line - 1, "character": max(n.col - 1, 0)},
-                                "end": {"line": n.line - 1, "character": max(n.col - 1 + len(name), 0)},
+                                "start": {
+                                    "line": n.line - 1,
+                                    "character": max(n.col - 1, 0),
+                                },
+                                "end": {
+                                    "line": n.line - 1,
+                                    "character": max(n.col - 1 + len(name), 0),
+                                },
                             },
                         }
                     )
-                for attr in ["body", "else_body", "expression", "value", "condition", "args", "elements"]:
+                for attr in [
+                    "body",
+                    "else_body",
+                    "expression",
+                    "value",
+                    "condition",
+                    "args",
+                    "elements",
+                ]:
                     child = getattr(n, attr, None)
                     if isinstance(child, list):
                         walk(child)

@@ -56,7 +56,9 @@ def execute_source(source: str, interpreter: Interpreter):
                     vars_list = list(interpreter.global_env.variables.keys())
                     funcs_list = list(interpreter.functions.keys())
                     candidates = vars_list + funcs_list
-                    suggestions = difflib.get_close_matches(missing_var, candidates, n=1, cutoff=0.6)
+                    suggestions = difflib.get_close_matches(
+                        missing_var, candidates, n=1, cutoff=0.6
+                    )
                     if suggestions:
                         print(f"Did you mean: '{suggestions[0]}'?")
         else:
@@ -160,7 +162,9 @@ def install_globally():
     print("=" * 50)
     is_windows = sys.platform == "win32"
     if is_windows:
-        install_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "ShellLite")
+        install_dir = os.path.join(
+            os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "ShellLite"
+        )
         target_exe = os.path.join(install_dir, "shl.exe")
     else:
         install_dir = os.path.expanduser("~/.local/bin")
@@ -231,7 +235,9 @@ def search_package(query: Optional[str] = None):
     print(f"  Searching for: {query if query else 'all'}")
     print("=" * 50)
     print("Notice: The package registry is being rebuilt for v0.6.2")
-    print("In the meantime, you can find packages at: https://github.com/topics/shell-lite")
+    print(
+        "In the meantime, you can find packages at: https://github.com/topics/shell-lite"
+    )
     print("=" * 50 + "\n")
 
 
@@ -255,7 +261,9 @@ def list_packages():
                         with open(toml_path, "r") as f:
                             for line in f:
                                 if line.startswith("version"):
-                                    version = line.split("=")[1].strip().strip('"').strip("'")
+                                    version = (
+                                        line.split("=")[1].strip().strip('"').strip("'")
+                                    )
                                     break
                     except Exception:
                         pass
@@ -290,9 +298,7 @@ def init_project():
     if os.path.exists("shell-lite.toml"):
         print("Error: shell-lite.toml already exists.")
         return
-    content = (
-        '[project]\nname = "my-shell-lite-app"\nversion = "0.1.0"\ndescription = "A new ShellLite project"\n[dependencies]\n'
-    )
+    content = '[project]\nname = "my-shell-lite-app"\nversion = "0.1.0"\ndescription = "A new ShellLite project"\n[dependencies]\n'
     with open("shell-lite.toml", "w") as f:
         f.write(content)
     print("[SUCCESS] Created shell-lite.toml")
@@ -401,7 +407,9 @@ def install_package(package_name: str, branch: str = "main", _visited=None):
                 print("  -> Branch 'main' not found, trying 'master'...")
                 zip_url = f"{base_url}/master.zip"
                 try:
-                    req = request.Request(zip_url, headers={"User-Agent": "ShellLite-CLI"})
+                    req = request.Request(
+                        zip_url, headers={"User-Agent": "ShellLite-CLI"}
+                    )
                     with request.urlopen(req) as response:
                         zip_data = response.read()
                     if zip_data is not None:
@@ -437,7 +445,9 @@ def install_package(package_name: str, branch: str = "main", _visited=None):
         if os.path.exists(pkg_toml):
             sub_deps = parse_toml_dependencies(pkg_toml)
             if sub_deps:
-                print(f"  -> Resolving {len(sub_deps)} dependencies for {package_name}...")
+                print(
+                    f"  -> Resolving {len(sub_deps)} dependencies for {package_name}..."
+                )
                 for sub_repo, sub_branch in sub_deps.items():
                     install_package(sub_repo, branch=sub_branch, _visited=_visited)
 
@@ -469,7 +479,9 @@ def compile_file(filename: str, target: str = "llvm"):
             return
 
         if target.lower() == "js":
-            print("Notice: The JS target is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+            print(
+                "Notice: The JS target is being rebuilt for v0.6.1.2 and is temporarily unavailable."
+            )
             return
         elif target.lower() == "llvm":
             try:
@@ -481,10 +493,14 @@ def compile_file(filename: str, target: str = "llvm"):
                 print("Error: 'llvmlite' is required for LLVM compilation.")
                 return
         elif target.lower() == "wasm":
-            print("Notice: The WASM target is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+            print(
+                "Notice: The WASM target is being rebuilt for v0.6.1.2 and is temporarily unavailable."
+            )
             return
         elif target.lower() == "c":
-            print("Notice: The C target is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+            print(
+                "Notice: The C target is being rebuilt for v0.6.1.2 and is temporarily unavailable."
+            )
             return
         else:
             from .compiler import Compiler
@@ -602,7 +618,14 @@ def resolve_cursor(filename: str, line: int, col: int):
                 queue.extend(n.body)
         if found_node:
             print(
-                json.dumps({"found": True, "file": filename, "line": found_node.line, "hover": f"**{found_type}** `{word}`"})
+                json.dumps(
+                    {
+                        "found": True,
+                        "file": filename,
+                        "line": found_node.line,
+                        "hover": f"**{found_type}** `{word}`",
+                    }
+                )
             )
         else:
             print(json.dumps({"found": False}))
@@ -615,7 +638,9 @@ def format_file(filename: str):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
-    print("Notice: The formatting feature is being rebuilt for v0.6.1.2 and is temporarily unavailable.")
+    print(
+        "Notice: The formatting feature is being rebuilt for v0.6.1.2 and is temporarily unavailable."
+    )
     return
 
 
@@ -706,7 +731,9 @@ def main():
                 import importlib.util
 
                 if importlib.util.find_spec("llvmlite") is None:
-                    print("Error: 'llvmlite' is required for LLVM backend. Run: pip install llvmlite")
+                    print(
+                        "Error: 'llvmlite' is required for LLVM backend. Run: pip install llvmlite"
+                    )
                 else:
                     from .llvm_backend.builder import build_llvm
 

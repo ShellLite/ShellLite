@@ -120,10 +120,14 @@ class LLVMCompiler:
         fcl_ty = ir.FunctionType(self.int_type, [vptr])
         self.fclose = ir.Function(self.module, fcl_ty, name="fclose")
 
-        fwr_ty = ir.FunctionType(self.int_type, [vptr, self.int_type, self.int_type, vptr])
+        fwr_ty = ir.FunctionType(
+            self.int_type, [vptr, self.int_type, self.int_type, vptr]
+        )
         self.fwrite = ir.Function(self.module, fwr_ty, name="fwrite")
 
-        frd_ty = ir.FunctionType(self.int_type, [vptr, self.int_type, self.int_type, vptr])
+        frd_ty = ir.FunctionType(
+            self.int_type, [vptr, self.int_type, self.int_type, vptr]
+        )
         self.fread = ir.Function(self.module, frd_ty, name="fread")
 
         fgt_ty = ir.FunctionType(vptr, [vptr, self.int_type, vptr])
@@ -148,7 +152,12 @@ class LLVMCompiler:
         sys_ty = ir.FunctionType(self.int_type, [vptr])
         self.system = ir.Function(self.module, sys_ty, name="system")
 
-        self.filename = filename.replace(".", "_").replace("/", "_").replace("\\", "_").replace(":", "_")
+        self.filename = (
+            filename.replace(".", "_")
+            .replace("/", "_")
+            .replace("\\", "_")
+            .replace(":", "_")
+        )
         init_func_name = f"__init_{self.filename}"
 
         func_type = ir.FunctionType(self.int_type, [], var_arg=False)
@@ -163,7 +172,9 @@ class LLVMCompiler:
 
         from .llvm_builder import LLVMBuilderHelper
 
-        self.bh = LLVMBuilderHelper(self.module, self.builder, self.int_type, self.char_ptr, self.str_constants)
+        self.bh = LLVMBuilderHelper(
+            self.module, self.builder, self.int_type, self.char_ptr, self.str_constants
+        )
 
         fmt_ptr = self.bh.get_string_constant(f"DEBUG: Init {init_func_name}")
 
@@ -216,8 +227,14 @@ class LLVMCompiler:
             elif isinstance(stmt, ClassDef):
                 self.classes[stmt.name] = stmt
                 # Register struct layout
-                prop_map = {p[0] if isinstance(p, tuple) else p: i for i, p in enumerate(stmt.properties)}
-                self.struct_registry[stmt.name] = {"properties": prop_map, "size": len(stmt.properties)}
+                prop_map = {
+                    p[0] if isinstance(p, tuple) else p: i
+                    for i, p in enumerate(stmt.properties)
+                }
+                self.struct_registry[stmt.name] = {
+                    "properties": prop_map,
+                    "size": len(stmt.properties),
+                }
                 # Declare methods
                 old_class = self.current_class
                 self.current_class = stmt
@@ -226,14 +243,18 @@ class LLVMCompiler:
                 self.current_class = old_class
             elif isinstance(stmt, Assign):
                 if stmt.name not in self.module.globals:
-                    g_var = ir.GlobalVariable(self.module, self.int_type, name=stmt.name)
+                    g_var = ir.GlobalVariable(
+                        self.module, self.int_type, name=stmt.name
+                    )
                     g_var.linkage = "common"
                     g_var.initializer = ir.Constant(self.int_type, 0)
             elif isinstance(stmt, Import):
                 if stmt.path.strip("\"'") == "time":
                     scope = self.scopes[0]
                     if "time" not in scope:
-                        ptr = ir.GlobalVariable(self.module, self.char_ptr, name="time_mod_ptr")
+                        ptr = ir.GlobalVariable(
+                            self.module, self.char_ptr, name="time_mod_ptr"
+                        )
                         ptr.linkage = "common"
                         ptr.initializer = ir.Constant(self.char_ptr, None)
                         ptr.sl_type = "time"
@@ -242,7 +263,10 @@ class LLVMCompiler:
 
                 resolved_path = self._resolve_path(stmt.path)
 
-                if os.path.exists(resolved_path) and resolved_path not in self.scanned_files:
+                if (
+                    os.path.exists(resolved_path)
+                    and resolved_path not in self.scanned_files
+                ):
                     self.scanned_files.add(resolved_path)
                     try:
                         with open(resolved_path, "r", encoding="utf-8") as f:
@@ -285,7 +309,9 @@ class LLVMCompiler:
     def visit_ForIn(self, node: ForIn) -> Optional[ir.Value]:
         """Generate LLVM loop for iterating over a range."""
         if not (isinstance(node.iterable, Call) and node.iterable.name == "range"):
-            raise UnsupportedNodeError(f"ForIn on non-range iterable '{type(node.iterable).__name__}' is not supported")
+            raise UnsupportedNodeError(
+                f"ForIn on non-range iterable '{type(node.iterable).__name__}' is not supported"
+            )
 
         cond_bb = self.builder.append_basic_block(name="for.cond")
         body_bb = self.builder.append_basic_block(name="for.body")
@@ -328,7 +354,9 @@ class LLVMCompiler:
         return None
 
     def generic_visit(self, node):
-        raise UnsupportedNodeError(f"LLVM backend does not support '{type(node).__name__}'")
+        raise UnsupportedNodeError(
+            f"LLVM backend does not support '{type(node).__name__}'"
+        )
 
     def visit_Number(self, node: Number) -> Optional[ir.Value]:
         """Generate an integer or float constant."""
@@ -372,9 +400,13 @@ class LLVMCompiler:
                             final_args.append(arg)
                         return self.builder.call(func, final_args, name="methcall")
                     else:
-                        raise CompilerError(f"Method {target_func_name} not found in module")
+                        raise CompilerError(
+                            f"Method {target_func_name} not found in module"
+                        )
                 else:
-                    raise CompilerError(f"Could not resolve method {method_name} on {left.type} (no sl_type)")
+                    raise CompilerError(
+                        f"Could not resolve method {method_name} on {left.type} (no sl_type)"
+                    )
             elif isinstance(node.right, VarAccess):
                 prop_name = node.right.name
                 sl_type = getattr(left, "sl_type", None)
@@ -387,12 +419,18 @@ class LLVMCompiler:
                             break
                     if prop_idx != -1:
                         ptr_i32 = self.builder.bitcast(left, self.int_type.as_pointer())
-                        ptr = self.builder.gep(ptr_i32, [ir.Constant(self.int_type, prop_idx)], name=f"prop_{prop_name}")
+                        ptr = self.builder.gep(
+                            ptr_i32,
+                            [ir.Constant(self.int_type, prop_idx)],
+                            name=f"prop_{prop_name}",
+                        )
                         val = self.builder.load(ptr, name=prop_name)
                         if val.type != self.int_type:
                             val = self.builder.zext(val, self.int_type)
                         return val
-                raise CompilerError(f"Could not resolve property {prop_name} on {left.type}")
+                raise CompilerError(
+                    f"Could not resolve property {prop_name} on {left.type}"
+                )
 
         right = self.visit(node.right)
         assert right is not None
@@ -418,7 +456,9 @@ class LLVMCompiler:
                 len1 = self.builder.call(self.strlen, [left], name="len1")
                 len2 = self.builder.call(self.strlen, [right], name="len2")
                 t_len = self.builder.add(len1, len2, name="total_len")
-                a_len = self.builder.add(t_len, ir.Constant(self.int_type, 1), name="alloc_len")
+                a_len = self.builder.add(
+                    t_len, ir.Constant(self.int_type, 1), name="alloc_len"
+                )
                 n_str = self.builder.call(self.malloc, [a_len], name="new_str")
                 self.builder.call(self.strcpy, [n_str, left])
                 self.builder.call(self.strcat, [n_str, right])
@@ -478,7 +518,9 @@ class LLVMCompiler:
         cond_val = self.visit(node.condition)
         assert cond_val is not None
         if cond_val.type != ir.IntType(1):
-            cond_val = self.builder.icmp_signed("!=", cond_val, ir.Constant(self.int_type, 0), name="ifcond")
+            cond_val = self.builder.icmp_signed(
+                "!=", cond_val, ir.Constant(self.int_type, 0), name="ifcond"
+            )
         then_bb = self.builder.append_basic_block(name="then")
         else_bb = self.builder.append_basic_block(name="else")
         merge_bb = self.builder.append_basic_block(name="ifcont")
@@ -507,7 +549,9 @@ class LLVMCompiler:
         cond_val = self.visit(node.condition)
         assert cond_val is not None
         if cond_val.type != ir.IntType(1):
-            cond_val = self.builder.icmp_signed("!=", cond_val, ir.Constant(self.int_type, 0), name="loopcond")
+            cond_val = self.builder.icmp_signed(
+                "!=", cond_val, ir.Constant(self.int_type, 0), name="loopcond"
+            )
         self.builder.cbranch(cond_val, body_bb, after_bb)
         self.builder.position_at_end(body_bb)
         for stmt in node.body:
@@ -536,7 +580,9 @@ class LLVMCompiler:
         for stmt in node.body:
             self.visit(stmt)
         curr_i_Body = self.builder.load(i_ptr)
-        next_i = self.builder.add(curr_i_Body, ir.Constant(self.int_type, 1), name="inc_i")
+        next_i = self.builder.add(
+            curr_i_Body, ir.Constant(self.int_type, 1), name="inc_i"
+        )
         self.builder.store(next_i, i_ptr)
         self.builder.branch(cond_bb)
         self.builder.position_at_end(after_bb)
@@ -593,7 +639,9 @@ class LLVMCompiler:
 
         props = self.struct_registry[class_name]["properties"]
         if node.property_name not in props:
-            raise CompilerError(f"Struct '{class_name}' has no property '{node.property_name}'")
+            raise CompilerError(
+                f"Struct '{class_name}' has no property '{node.property_name}'"
+            )
 
         prop_idx = props[node.property_name]
         offset = ir.Constant(self.int_type, prop_idx)
@@ -621,7 +669,9 @@ class LLVMCompiler:
 
         props = self.struct_registry[class_name]["properties"]
         if node.property_name not in props:
-            raise CompilerError(f"Struct '{class_name}' has no property '{node.property_name}'")
+            raise CompilerError(
+                f"Struct '{class_name}' has no property '{node.property_name}'"
+            )
 
         prop_idx = props[node.property_name]
         offset = ir.Constant(self.int_type, prop_idx)
@@ -682,14 +732,22 @@ class LLVMCompiler:
             val = self.visit(node.args[0])
             assert val is not None
             if isinstance(val.type, ir.DoubleType):
-                cond = self.builder.fcmp_ordered("<", val, ir.Constant(ir.DoubleType(), 0.0), name="abs_cond")
-                neg_val = self.builder.fsub(ir.Constant(ir.DoubleType(), 0.0), val, name="abs_neg")
+                cond = self.builder.fcmp_ordered(
+                    "<", val, ir.Constant(ir.DoubleType(), 0.0), name="abs_cond"
+                )
+                neg_val = self.builder.fsub(
+                    ir.Constant(ir.DoubleType(), 0.0), val, name="abs_neg"
+                )
                 return self.builder.select(cond, neg_val, val, name="abs_res")
             else:
                 if val.type != self.int_type:
                     val = self.builder.zext(val, self.int_type)
-                cond = self.builder.icmp_signed("<", val, ir.Constant(self.int_type, 0), name="abs_cond")
-                neg_val = self.builder.sub(ir.Constant(self.int_type, 0), val, name="abs_neg")
+                cond = self.builder.icmp_signed(
+                    "<", val, ir.Constant(self.int_type, 0), name="abs_cond"
+                )
+                neg_val = self.builder.sub(
+                    ir.Constant(self.int_type, 0), val, name="abs_neg"
+                )
                 return self.builder.select(cond, neg_val, val, name="abs_res")
         elif node.name == "int" or node.name == "float" or node.name == "str":
             return self.visit(node.args[0])
@@ -701,7 +759,9 @@ class LLVMCompiler:
                     val = self.builder.ptrtoint(val, self.int_type)
                 else:
                     val = self.builder.zext(val, self.int_type)
-            buf = self.builder.call(self.malloc, [ir.Constant(self.int_type, 2)], name="char_buf")
+            buf = self.builder.call(
+                self.malloc, [ir.Constant(self.int_type, 2)], name="char_buf"
+            )
             val_i8 = self.builder.trunc(val, ir.IntType(8))
             self.builder.store(val_i8, buf)
             null_ptr = self.builder.gep(buf, [ir.Constant(self.int_type, 1)])
@@ -740,7 +800,9 @@ class LLVMCompiler:
         if node.name in self.module.globals:
             func = self.module.globals[node.name]
         elif node.name in self.classes:
-            return self.visit_Instantiation(Instantiation(var_name=None, class_name=node.name, args=node.args))
+            return self.visit_Instantiation(
+                Instantiation(var_name=None, class_name=node.name, args=node.args)
+            )
         elif node.name == "read":
             if len(node.args) > 0:
                 return self.visit_FileRead(FileRead(node.args[0]))
@@ -765,7 +827,11 @@ class LLVMCompiler:
     def visit_IndexAccess(self, node: IndexAccess) -> Optional[ir.Value]:
         obj_ptr = self.visit(node.obj)
         assert obj_ptr is not None
-        if isinstance(obj_ptr, ir.Constant) and obj_ptr.type == self.char_ptr and obj_ptr.constant is None:
+        if (
+            isinstance(obj_ptr, ir.Constant)
+            and obj_ptr.type == self.char_ptr
+            and obj_ptr.constant is None
+        ):
             v_idx = self.visit(node.index)
             assert v_idx is not None
             return self.builder.call(self.dict_get, [obj_ptr, v_idx])
@@ -790,7 +856,11 @@ class LLVMCompiler:
     def visit_IndexAssign(self, node: IndexAssign) -> Optional[ir.Value]:
         obj_ptr = self.visit(node.obj)
         assert obj_ptr is not None
-        if isinstance(obj_ptr, ir.Constant) and obj_ptr.type == self.char_ptr and obj_ptr.constant is None:
+        if (
+            isinstance(obj_ptr, ir.Constant)
+            and obj_ptr.type == self.char_ptr
+            and obj_ptr.constant is None
+        ):
             v_idx = self.visit(node.index)
             v_val = self.visit(node.value)
             assert v_idx is not None
@@ -881,13 +951,23 @@ class LLVMCompiler:
         if value.type != ptr.type.pointee:
             if value.type == ir.IntType(1) and ptr.type.pointee == self.int_type:
                 value = self.builder.zext(value, self.int_type)
-            elif isinstance(value.type, ir.PointerType) and ptr.type.pointee == self.int_type:
+            elif (
+                isinstance(value.type, ir.PointerType)
+                and ptr.type.pointee == self.int_type
+            ):
                 value = self.builder.ptrtoint(value, self.int_type)
-            elif value.type == self.int_type and isinstance(ptr.type.pointee, ir.PointerType):
+            elif value.type == self.int_type and isinstance(
+                ptr.type.pointee, ir.PointerType
+            ):
                 value = self.builder.inttoptr(value, ptr.type.pointee)
-            elif isinstance(value.type, ir.DoubleType) and ptr.type.pointee == self.int_type:
+            elif (
+                isinstance(value.type, ir.DoubleType)
+                and ptr.type.pointee == self.int_type
+            ):
                 value = self.builder.fptosi(value, self.int_type)
-            elif value.type == self.int_type and isinstance(ptr.type.pointee, ir.DoubleType):
+            elif value.type == self.int_type and isinstance(
+                ptr.type.pointee, ir.DoubleType
+            ):
                 value = self.builder.sitofp(value, ir.DoubleType())
         self.builder.store(value, ptr)
         return value
@@ -905,7 +985,9 @@ class LLVMCompiler:
             instance_ptr = self.builder.load(scope["self"])
             class_name = getattr(scope["self"], "sl_type", None)
 
-        full_method_name = f"{class_name}_{node.method_name}" if class_name else node.method_name
+        full_method_name = (
+            f"{class_name}_{node.method_name}" if class_name else node.method_name
+        )
 
         if full_method_name in self.module.globals:
             func = self.module.globals[full_method_name]
@@ -929,7 +1011,9 @@ class LLVMCompiler:
                 if "time_mod_ptr" in self.module.globals:
                     ptr = self.module.get_global("time_mod_ptr")
                 else:
-                    ptr = ir.GlobalVariable(self.module, self.char_ptr, name="time_mod_ptr")
+                    ptr = ir.GlobalVariable(
+                        self.module, self.char_ptr, name="time_mod_ptr"
+                    )
                     ptr.linkage = "internal"
                     ptr.initializer = ir.Constant(self.char_ptr, None)
                 ptr.sl_type = "time"
@@ -1000,7 +1084,9 @@ class LLVMCompiler:
         mode = self.bh.get_string_constant("w")
         fp = self.builder.call(self.fopen, [path, mode], name="fp")
         length = self.builder.call(self.strlen, [content])
-        self.builder.call(self.fwrite, [content, ir.Constant(self.int_type, 1), length, fp])
+        self.builder.call(
+            self.fwrite, [content, ir.Constant(self.int_type, 1), length, fp]
+        )
         self.builder.call(self.fclose, [fp])
         return ir.Constant(self.int_type, 0)
 
@@ -1009,7 +1095,10 @@ class LLVMCompiler:
         assert path is not None
         mode = self.bh.get_string_constant("rb")
         fp = self.builder.call(self.fopen, [path, mode], name="fp")
-        self.builder.call(self.fseek, [fp, ir.Constant(self.int_type, 0), ir.Constant(self.int_type, 2)])
+        self.builder.call(
+            self.fseek,
+            [fp, ir.Constant(self.int_type, 0), ir.Constant(self.int_type, 2)],
+        )
         size = self.builder.call(self.ftell, [fp], name="fsize")
         self.builder.call(self.rewind, [fp])
         a_size = self.builder.add(size, ir.Constant(self.int_type, 1))
@@ -1029,7 +1118,9 @@ class LLVMCompiler:
                     val.sl_type = ptr.sl_type
                 return val
 
-        if self.current_class and any(p[0] == node.name for p in self.current_class.properties):
+        if self.current_class and any(
+            p[0] == node.name for p in self.current_class.properties
+        ):
             scope = self._get_scope()
             if "self" in scope:
                 self_ptr = self.builder.load(scope["self"], name="self_ptr")
@@ -1040,8 +1131,14 @@ class LLVMCompiler:
                         prop_idx = i
                         break
                 if prop_idx != -1:
-                    self_ptr_i32 = self.builder.bitcast(self_ptr, self.int_type.as_pointer())
-                    ptr = self.builder.gep(self_ptr_i32, [ir.Constant(self.int_type, prop_idx)], name=f"prop_{node.name}")
+                    self_ptr_i32 = self.builder.bitcast(
+                        self_ptr, self.int_type.as_pointer()
+                    )
+                    ptr = self.builder.gep(
+                        self_ptr_i32,
+                        [ir.Constant(self.int_type, prop_idx)],
+                        name=f"prop_{node.name}",
+                    )
                     val = self.builder.load(ptr, name=node.name)
                     if val.type != self.int_type:
                         if val.type.width < 32:

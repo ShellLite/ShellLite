@@ -137,7 +137,9 @@ class Compiler:
             is_block_call = isinstance(stmt, Call) and stmt.body
             if is_expr and not is_block_call:
                 stmt_code = f"_shl_ret = {stmt_code}\n_web_builder.add_text(_shl_ret)"
-            indented_stmt = "\n".join([f"{self.indent()}{line}" for line in stmt_code.split("\n")])
+            indented_stmt = "\n".join(
+                [f"{self.indent()}{line}" for line in stmt_code.split("\n")]
+            )
             code += indented_stmt + "\n"
         return code.rstrip()
 
@@ -791,7 +793,9 @@ class Compiler:
         return code
 
     def visit_ServeStatic(self, node: ServeStatic):
-        return f"GLOBAL_STATIC_ROUTES[{self.visit(node.url)}] = {self.visit(node.folder)}"
+        return (
+            f"GLOBAL_STATIC_ROUTES[{self.visit(node.url)}] = {self.visit(node.folder)}"
+        )
 
     def visit_OnRequest(self, node: OnRequest):
         path = self.visit(node.path)

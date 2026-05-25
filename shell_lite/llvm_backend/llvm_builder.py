@@ -21,8 +21,12 @@ class LLVMBuilderHelper:
         if text in self.str_constants:
             return self.str_constants[text]
 
-        str_val = ir.Constant(ir.ArrayType(ir.IntType(8), len(text)), bytearray(text.encode("utf8")))
-        str_ptr = ir.GlobalVariable(self.module, str_val.type, name=f".str_{len(self.str_constants)}")
+        str_val = ir.Constant(
+            ir.ArrayType(ir.IntType(8), len(text)), bytearray(text.encode("utf8"))
+        )
+        str_ptr = ir.GlobalVariable(
+            self.module, str_val.type, name=f".str_{len(self.str_constants)}"
+        )
         str_ptr.linkage = "internal"
         str_ptr.global_constant = True
         str_ptr.initializer = str_val

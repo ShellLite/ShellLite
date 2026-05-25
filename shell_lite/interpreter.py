@@ -93,16 +93,31 @@ class PythonBridgeWrapper:
 
                 def wrapper(*args, **kwargs):
                     try:
-                        unwrapped_args = [a._obj if isinstance(a, PythonBridgeWrapper) else a for a in args]
+                        unwrapped_args = [
+                            a._obj if isinstance(a, PythonBridgeWrapper) else a
+                            for a in args
+                        ]
                         unwrapped_kwargs = {
-                            k: (v._obj if isinstance(v, PythonBridgeWrapper) else v) for k, v in kwargs.items()
+                            k: (v._obj if isinstance(v, PythonBridgeWrapper) else v)
+                            for k, v in kwargs.items()
                         }
                         result = attr(*unwrapped_args, **unwrapped_kwargs)
-                        if type(result) in (int, float, str, bool, type(None), list, dict, bytes):
+                        if type(result) in (
+                            int,
+                            float,
+                            str,
+                            bool,
+                            type(None),
+                            list,
+                            dict,
+                            bytes,
+                        ):
                             return result
                         return PythonBridgeWrapper(result, name=f"{self._name}.{key}()")
                     except Exception as e:
-                        raise RuntimeError(f"Python interop error calling '{self._name}.{key}': {e}")
+                        raise RuntimeError(
+                            f"Python interop error calling '{self._name}.{key}': {e}"
+                        )
 
                 return wrapper
             if type(attr) in (int, float, str, bool, type(None), list, dict, bytes):
@@ -156,7 +171,9 @@ class PythonBridgeWrapper:
 
 
 class LambdaFunction:
-    def __init__(self, params: List[str], body, interpreter, name: Optional[str] = None):
+    def __init__(
+        self, params: List[str], body, interpreter, name: Optional[str] = None
+    ):
         self.params = params
         self.body = body
         self.interpreter = interpreter
@@ -165,8 +182,19 @@ class LambdaFunction:
 
     def __call__(self, *args, **kwargs):
         old_env = self.interpreter.current_env
-        inst = args[0] if (self.params and self.params[0] == "self" and args and isinstance(args[0], Instance)) else None
-        new_env = Environment(parent=self.closure_env, instance_data=inst.data if inst else None)
+        inst = (
+            args[0]
+            if (
+                self.params
+                and self.params[0] == "self"
+                and args
+                and isinstance(args[0], Instance)
+            )
+            else None
+        )
+        new_env = Environment(
+            parent=self.closure_env, instance_data=inst.data if inst else None
+        )
 
         for param, arg in zip(self.params, args):
             new_env.variables[param] = arg
@@ -186,7 +214,9 @@ class Instance:
         self.interpreter = interpreter
         self.data: Dict[str, Any] = {}
         for prop_name, default_node in class_def.properties:
-            self.data[prop_name] = interpreter.visit(default_node) if default_node else None
+            self.data[prop_name] = (
+                interpreter.visit(default_node) if default_node else None
+            )
 
     def to_dict(self, visited=None):
         if visited is None:
@@ -211,7 +241,12 @@ class Instance:
     def get_method(self, name: str):
         for method in self.class_def.methods:
             if method.name == name:
-                return LambdaFunction(["self"] + [a[0] for a in method.args], method.body, self.interpreter, name=method.name)
+                return LambdaFunction(
+                    ["self"] + [a[0] for a in method.args],
+                    method.body,
+                    self.interpreter,
+                    name=method.name,
+                )
         return None
 
 
@@ -416,6 +451,7 @@ def std_csv_export(data, path):
 
     return path
 
+
 class Interpreter:
     def __init__(self):
         self.safe_mode = os.environ.get("SHL_SAFE") == "1"
@@ -453,7 +489,9 @@ class Interpreter:
             "py_exec": exec,
             "tuple": lambda x: tuple(x),
             "getattr": getattr,
-            "add": lambda target, item: target.add(item) if isinstance(target, set) else target.append(item),
+            "add": lambda target, item: (
+                target.add(item) if isinstance(target, set) else target.append(item)
+            ),
             "remove": lambda target, item: target.remove(item),
             "sum": sum,
             "split": lambda x, sep=None: x.split(sep) if sep else x.split(),
@@ -475,8 +513,12 @@ class Interpreter:
             ),
             "contains": lambda obj, item: item in obj,
             "std_io_read": lambda path: open(path, "r", encoding="utf-8").read(),
-            "std_io_write": lambda path, content: open(path, "w", encoding="utf-8").write(content),
-            "std_io_append": lambda path, content: open(path, "a", encoding="utf-8").write(content),
+            "std_io_write": lambda path, content: open(
+                path, "w", encoding="utf-8"
+            ).write(content),
+            "std_io_append": lambda path, content: open(
+                path, "a", encoding="utf-8"
+            ).write(content),
             "clear_dict": lambda d: d.clear(),
         }
         self.web_builder = []
@@ -579,7 +621,11 @@ class Interpreter:
 
     def visit_VarAccess(self, node: VarAccess):
         val = self.current_env.get(node.name)
-        if isinstance(val, LambdaFunction) and len(val.params) == 0 and getattr(val, "name", None) is not None:
+        if (
+            isinstance(val, LambdaFunction)
+            and len(val.params) == 0
+            and getattr(val, "name", None) is not None
+        ):
             return val()
         return val
 
@@ -604,7 +650,11 @@ class Interpreter:
                     method = left.get_method(node.right.name)
                     if method:
                         args = [self.visit(a) for a in node.right.args]
-                        kwargs = {k: self.visit(v) for k, v in node.right.kwargs} if node.right.kwargs else {}
+                        kwargs = (
+                            {k: self.visit(v) for k, v in node.right.kwargs}
+                            if node.right.kwargs
+                            else {}
+                        )
                         return method(left, *args, **kwargs)
                 elif isinstance(node.right, VarAccess):
                     method = left.get_method(node.right.name)
@@ -614,7 +664,11 @@ class Interpreter:
             if isinstance(node.right, Call):
                 attr = getattr(left, node.right.name)
                 args = [self.visit(a) for a in node.right.args]
-                kwargs = {k: self.visit(v) for k, v in node.right.kwargs} if node.right.kwargs else {}
+                kwargs = (
+                    {k: self.visit(v) for k, v in node.right.kwargs}
+                    if node.right.kwargs
+                    else {}
+                )
                 return attr(*args, **kwargs)
             elif isinstance(node.right, VarAccess):
                 return getattr(left, node.right.name)
@@ -828,7 +882,9 @@ class Interpreter:
         args = [self.visit(a) for a in node.call.args]
         if node.call.body:
             args.append(LambdaFunction([], node.call.body, self, name=None))
-        kwargs = {k: self.visit(v) for k, v in node.call.kwargs} if node.call.kwargs else {}
+        kwargs = (
+            {k: self.visit(v) for k, v in node.call.kwargs} if node.call.kwargs else {}
+        )
 
         def run_threaded():
             try:

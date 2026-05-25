@@ -25,10 +25,18 @@ class Token:
     column: int = 1
 
     def __post_init__(self) -> None:
-        assert isinstance(self.type, str), f"Token type must be str, got {type(self.type)}"
-        assert isinstance(self.value, str), f"Token value must be str, got {type(self.value)}"
-        assert isinstance(self.line, int) and self.line > 0, "Token line must be a positive integer"
-        assert isinstance(self.column, int) and self.column > 0, "Token column must be a positive integer"
+        assert isinstance(
+            self.type, str
+        ), f"Token type must be str, got {type(self.type)}"
+        assert isinstance(
+            self.value, str
+        ), f"Token value must be str, got {type(self.value)}"
+        assert (
+            isinstance(self.line, int) and self.line > 0
+        ), "Token line must be a positive integer"
+        assert (
+            isinstance(self.column, int) and self.column > 0
+        ), "Token column must be a positive integer"
 
 
 class Lexer:
@@ -338,11 +346,15 @@ class Lexer:
             if self.bracket_depth == 0:
                 if indent_level > self.indent_stack[-1]:
                     self.indent_stack.append(indent_level)
-                    self.tokens.append(Token("INDENT", "", self.line_number, indent_level + 1))
+                    self.tokens.append(
+                        Token("INDENT", "", self.line_number, indent_level + 1)
+                    )
                 elif indent_level < self.indent_stack[-1]:
                     while indent_level < self.indent_stack[-1]:
                         self.indent_stack.pop()
-                        self.tokens.append(Token("DEDENT", "", self.line_number, indent_level + 1))
+                        self.tokens.append(
+                            Token("DEDENT", "", self.line_number, indent_level + 1)
+                        )
                     if indent_level != self.indent_stack[-1]:
                         raise IndentationError(
                             f"Unindent does not match any outer indentation level on line {self.line_number}"
@@ -352,7 +364,9 @@ class Lexer:
 
             # Newlines are only meaningful outside brackets
             if self.bracket_depth == 0:
-                self.tokens.append(Token("NEWLINE", "", self.line_number, len(line) + 1))
+                self.tokens.append(
+                    Token("NEWLINE", "", self.line_number, len(line) + 1)
+                )
 
         # Emit any remaining dedents at the end of the file
         while len(self.indent_stack) > 1:
@@ -424,7 +438,9 @@ class Lexer:
                     break
 
             if not matched:
-                raise SyntaxError(f"Illegal character '{line[pos]}' at line {self.line_number}, column {pos + 1}")
+                raise SyntaxError(
+                    f"Illegal character '{line[pos]}' at line {self.line_number}, column {pos + 1}"
+                )
 
     def _is_regex_start(self) -> bool:
         """
@@ -450,7 +466,14 @@ class Lexer:
         Removes quotes and processes escape sequences in a string literal.
         """
         content = value[1:-1]
-        escapes = {"\\n": "\n", "\\t": "\t", "\\r": "\r", '\\"': '"', "\\'": "'", "\\\\": "\\"}
+        escapes = {
+            "\\n": "\n",
+            "\\t": "\t",
+            "\\r": "\r",
+            '\\"': '"',
+            "\\'": "'",
+            "\\\\": "\\",
+        }
         for esc, rel in escapes.items():
             content = content.replace(esc, rel)
         return content
