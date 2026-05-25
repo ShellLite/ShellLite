@@ -587,7 +587,7 @@ class Parser:
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
             raise SyntaxError(f"Missing condition for 'while' statement at line {node.line}")
-        
+
         self.loop_depth += 1
 
         try:
@@ -604,7 +604,7 @@ class Parser:
         count = self.parse_expr_iterative(expr_tokens)
         if count is None:
             raise SyntaxError(f"Missing count for 'repeat' statement at line {node.line}")
-        
+
         self.loop_depth += 1
 
         try:

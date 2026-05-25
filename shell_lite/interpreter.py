@@ -263,9 +263,11 @@ def make_jit_tag_fn(name, interpreter):
 
     return fn
 
+
 # RUNTIME CLASSES OVER ----------
 
 # SERIALIZER START ----- (ML PIPELINE SUPPORT)
+
 
 class SerializationError(Exception):
     pass
@@ -325,23 +327,19 @@ def serialize_runtime_value(value, visited=None):
         return serialize_runtime_value(value._obj, visited)
 
     if isinstance(value, dict):
-        return {
-            str(k): serialize_runtime_value(v, visited)
-            for k, v in value.items()
-        }
+        return {str(k): serialize_runtime_value(v, visited) for k, v in value.items()}
 
     if isinstance(value, (list, tuple, set)):
-        return [
-            serialize_runtime_value(v, visited)
-            for v in value
-        ]
+        return [serialize_runtime_value(v, visited) for v in value]
 
     if isinstance(value, (datetime.date, datetime.datetime)):
         return value.isoformat()
 
     return str(value)
 
+
 # JSON
+
 
 def std_json_export(data, path, indent=2):
     serialized = serialize_runtime_value(data)
@@ -357,13 +355,13 @@ def std_json_export(data, path, indent=2):
 
     return path
 
+
 # CSV
+
 
 def validate_csv_rows(data):
     if not isinstance(data, list):
-        raise SerializationError(
-            "CSV export expects a list"
-        )
+        raise SerializationError("CSV export expects a list")
 
     if not data:
         return "empty"
@@ -376,16 +374,13 @@ def validate_csv_rows(data):
     if isinstance(first, (list, tuple)):
         return "list_rows"
 
-    raise SerializationError(
-        "CSV export requires list of dicts or list of lists"
-    )
+    raise SerializationError("CSV export requires list of dicts or list of lists")
 
 
 def std_csv_export(data, path):
     mode = validate_csv_rows(data)
 
     with open(path, "w", newline="", encoding="utf-8") as f:
-
         if mode == "empty":
             return path
 
@@ -406,10 +401,7 @@ def std_csv_export(data, path):
             writer.writeheader()
 
             for row in data:
-                serialized_row = {
-                    k: serialize_runtime_value(v)
-                    for k, v in row.items()
-                }
+                serialized_row = {k: serialize_runtime_value(v) for k, v in row.items()}
 
                 writer.writerow(serialized_row)
 
@@ -420,14 +412,13 @@ def std_csv_export(data, path):
             )
 
             for row in data:
-                writer.writerow([
-                    serialize_runtime_value(v)
-                    for v in row
-                ])
+                writer.writerow([serialize_runtime_value(v) for v in row])
 
     return path
 
+
 # INTERPRETER STARTS --------
+
 
 class SerializationError(Exception):
     pass
@@ -638,7 +629,6 @@ class Interpreter:
             "std_io_write": lambda path, content: open(path, "w", encoding="utf-8").write(content),
             "std_io_append": lambda path, content: open(path, "a", encoding="utf-8").write(content),
             "clear_dict": lambda d: d.clear(),
-         
         }
         self.web_builder = []
         for t in [
