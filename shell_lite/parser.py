@@ -88,6 +88,8 @@ class Parser:
     root_nodes: List[GeoNode]
 
     def __init__(self, source_or_tokens: Any = None, tokens: Optional[List[Token]] = None):
+        self.loop_depth = 0
+
         if isinstance(source_or_tokens, str):
             self.source_code = source_or_tokens
             self.legacy_tokens = tokens
@@ -585,7 +587,14 @@ class Parser:
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
             raise SyntaxError(f"Missing condition for 'while' statement at line {node.line}")
-        body = self.bind_statement_list(node.children)
+        
+        self.loop_depth += 1
+
+        try:
+            body = self.bind_statement_list(node.children)
+        finally:
+            self.loop_depth -= 1
+
         return While(condition, body)
 
     def bind_repeat(self, node: GeoNode) -> Node:
@@ -595,11 +604,24 @@ class Parser:
         count = self.parse_expr_iterative(expr_tokens)
         if count is None:
             raise SyntaxError(f"Missing count for 'repeat' statement at line {node.line}")
-        body = self.bind_statement_list(node.children)
+        
+        self.loop_depth += 1
+
+        try:
+            body = self.bind_statement_list(node.children)
+        finally:
+            self.loop_depth -= 1
+
         return Repeat(count, body)
 
     def bind_forever(self, node: GeoNode) -> Node:
-        body = self.bind_statement_list(node.children)
+        self.loop_depth += 1
+
+        try:
+            body = self.bind_statement_list(node.children)
+        finally:
+            self.loop_depth -= 1
+
         return While(Boolean(True), body)
 
     def bind_for(self, node: GeoNode) -> Optional[Node]:
@@ -626,10 +648,20 @@ class Parser:
                     count = self.parse_expr_iterative(e_tokens)
                     if count is None:
                         raise SyntaxError(f"Missing count for 'loop' statement at line {node.line}")
-                    body = self.bind_statement_list(node.children)
+                    self.loop_depth += 1
+
+                    try:
+                        body = self.bind_statement_list(node.children)
+                    finally:
+                        self.loop_depth -= 1
+
                     return Repeat(count, body)
             return None
-        body = self.bind_statement_list(node.children)
+        self.loop_depth += 1
+        try:
+            body = self.bind_statement_list(node.children)
+        finally:
+            self.loop_depth -= 1
         if node.tokens[in_idx + 1].type == "RANGE":
             args_tokens = self._extract_expr_tokens(node.tokens, in_idx + 2)
             filtered = [t for t in args_tokens if t.type not in ("LPAREN", "RPAREN", "COMMA")]
@@ -994,9 +1026,13 @@ class Parser:
         return Exit(code)
 
     def bind_stop(self, node: GeoNode) -> Stop:
+        if self.loop_depth <= 0:
+            raise SyntaxError(f"'Stop' statement used outside a Loop at line {node.line}")
         return Stop()
 
     def bind_skip(self, node: GeoNode) -> Skip:
+        if self.loop_depth <= 0:
+            raise SyntaxError(f"'Skip' statement used outside a Loop at line {node.line}")
         return Skip()
 
     def bind_spawn(self, node: GeoNode) -> Spawn:
