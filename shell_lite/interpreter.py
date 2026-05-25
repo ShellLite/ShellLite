@@ -1,5 +1,3 @@
-# REGULAR IMPORTS
-
 import concurrent.futures
 import csv
 import datetime
@@ -11,18 +9,9 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-# PARSER
-
 from .ast_nodes import *
 from .parser import Parser
 
-# ML Pipeline Support Imports
-
-import csv
-import datetime
-from collections.abc import Mapping
-
-# CLASSES
 
 class ReturnException(Exception):
     def __init__(self, value):
