@@ -17,7 +17,7 @@ from shell_lite.parser import Parser
 
 class TestInterpreter(unittest.TestCase):
     """
-    Test suite for ShellLite Interpreter evaluation and logic. 
+    Test suite for ShellLite Interpreter evaluation and logic.
     """
 
     def run_code(self, code: str):

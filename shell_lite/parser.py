@@ -351,6 +351,7 @@ class Parser:
             "UNTIL": self.bind_until,
             "ON": self.bind_dsl_lowering,
             "FUNCTION": self.bind_func,
+            "FN": self.bind_func,
             "TO": self.bind_func,
             "PRINT": self.bind_print,
             "SAY": self.bind_print,
@@ -578,7 +579,7 @@ class Parser:
                 if assign_idx != -1:
                     default_val = self.parse_expr_iterative(child.tokens[assign_idx + 1 :])
                 properties.append((prop_name, default_val))
-            elif head == "TO" or head == "FUNCTION":
+            elif head == "TO" or head == "FUNCTION" or head == "FN":
                 methods.append(self.bind_func(child))
         return ClassDef(name, properties, methods, parent)
 
@@ -587,7 +588,7 @@ class Parser:
         condition = self.parse_expr_iterative(expr_tokens)
         if condition is None:
             raise SyntaxError(f"Missing condition for 'while' statement at line {node.line}")
-        
+
         self.loop_depth += 1
 
         try:
@@ -604,7 +605,7 @@ class Parser:
         count = self.parse_expr_iterative(expr_tokens)
         if count is None:
             raise SyntaxError(f"Missing count for 'repeat' statement at line {node.line}")
-        
+
         self.loop_depth += 1
 
         try:

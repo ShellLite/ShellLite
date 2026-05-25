@@ -46,17 +46,14 @@ class Environment:
         if name in self.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
 
-        # 1. Local variable shadowing or already existing
         if name in self.variables:
             self.variables[name] = value
             return
 
-        # 2. Instance data property
         if self.instance_data is not None and name in self.instance_data:
             self.instance_data[name] = value
             return
 
-        # 3. Parent scope (search for existing variable)
         curr = self.parent
         while curr:
             if name in curr.variables:
@@ -69,7 +66,6 @@ class Environment:
                 return
             curr = curr.parent
 
-        # 4. Create new local variable
         self.variables[name] = value
 
     def set_const(self, name: str, value: Any):
@@ -89,6 +85,7 @@ class PythonBridgeWrapper:
             return super()._obj
         try:
             attr = getattr(self._obj, key)
+
             if callable(attr):
 
                 def wrapper(*args, **kwargs):
@@ -214,6 +211,23 @@ class Instance:
                 return LambdaFunction(["self"] + [a[0] for a in method.args], method.body, self.interpreter, name=method.name)
         return None
 
+    def get_member(self, name: str):
+        method = self.get_method(name)
+        if method:
+            return lambda *args, **kwargs: method(self, *args, **kwargs)
+        return self.data.get(name)
+
+
+class Module:
+    def __init__(self, name: str, variables: Dict[str, Any]):
+        self.name = name
+        self.variables = variables
+
+    def get_member(self, name: str):
+        if name in self.variables:
+            return self.variables[name]
+        raise AttributeError(f"Module '{self.name}' has no member '{name}'")
+
 
 class JITTag:
     def __init__(self, name, attrs=None):
@@ -333,9 +347,6 @@ def serialize_runtime_value(value, visited=None):
     return str(value)
 
 
-# JSON
-
-
 def std_json_export(data, path, indent=2):
     serialized = serialize_runtime_value(data)
 
@@ -349,9 +360,6 @@ def std_json_export(data, path, indent=2):
         )
 
     return path
-
-
-# CSV
 
 
 def validate_csv_rows(data):
@@ -432,7 +440,7 @@ class Interpreter:
             "serialize": serialize_runtime_value,
             "range": lambda *args: list(range(*args)),
             "abs": abs,
-            "typeof": lambda x: type(x).__name__,
+            "typeof": self._builtin_typeof,
             "print": print,
             "say": print,
             "ask": input,
@@ -521,16 +529,21 @@ class Interpreter:
     def current_env(self, value):
         self._thread_local.current_env = value
 
+    def _builtin_typeof(self, x):
+        if isinstance(x, Instance):
+            return x.class_def.name
+        if isinstance(x, Module):
+            return "Module"
+        return type(x).__name__
+
     def _load_stdlib(self):
         stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
         if not os.path.exists(stdlib_path):
             return
         std_file = os.path.join(stdlib_path, "std.shl")
         if os.path.exists(std_file):
-            with open(std_file, "r", encoding="utf-8") as f:
-                source = f.read()
             try:
-                nodes = Parser(source).parse()
+                nodes = self._load_module_nodes("std.shl", search_paths=[stdlib_path])
                 self.visit_block(nodes)
             except Exception as e:
                 import traceback
@@ -538,6 +551,22 @@ class Interpreter:
                 print(f"Warning: Failed to load stdlib: {e}")
                 if os.environ.get("SHL_DEBUG"):
                     traceback.print_exc()
+
+    def _load_module_nodes(self, path: str, search_paths: Optional[List[str]] = None) -> List[Node]:
+        if not path.endswith(".shl"):
+            path += ".shl"
+
+        if search_paths is None:
+            search_paths = [os.getcwd(), os.path.join(os.path.dirname(__file__), "stdlib")]
+
+        for p in search_paths:
+            full_path = os.path.join(p, path)
+            if os.path.exists(full_path):
+                with open(full_path, "r", encoding="utf-8") as f:
+                    source = f.read()
+                return Parser(source).parse()
+
+        raise FileNotFoundError(f"Module {path} not found")
 
     def visit(self, node: Node) -> Any:
         if node is None:
@@ -594,26 +623,19 @@ class Interpreter:
     def visit_BinOp(self, node: BinOp):
         left = self.visit(node.left)
         if node.op == ".":
-            if isinstance(left, Instance):
-                if isinstance(node.right, Call):
-                    method = left.get_method(node.right.name)
-                    if method:
-                        args = [self.visit(a) for a in node.right.args]
-                        kwargs = {k: self.visit(v) for k, v in node.right.kwargs} if node.right.kwargs else {}
-                        return method(left, *args, **kwargs)
-                elif isinstance(node.right, VarAccess):
-                    method = left.get_method(node.right.name)
-                    if method:
-                        return lambda *args, **kwargs: method(left, *args, **kwargs)
-                    return left.data.get(node.right.name)
+            member_name = node.right.name if hasattr(node.right, "name") else str(node.right)
+
+            if hasattr(left, "get_member"):
+                member = left.get_member(member_name)
+            else:
+                member = getattr(left, member_name)
+
             if isinstance(node.right, Call):
-                attr = getattr(left, node.right.name)
                 args = [self.visit(a) for a in node.right.args]
                 kwargs = {k: self.visit(v) for k, v in node.right.kwargs} if node.right.kwargs else {}
-                return attr(*args, **kwargs)
-            elif isinstance(node.right, VarAccess):
-                return getattr(left, node.right.name)
-            return getattr(left, str(node.right))
+                return member(*args, **kwargs)
+            return member
+
         right = self.visit(node.right)
         ops = {
             "+": lambda a, b: a + b,
@@ -738,18 +760,23 @@ class Interpreter:
         raise SkipException()
 
     def visit_Import(self, node: Import):
-        path = node.path
-        if not path.endswith(".shl"):
-            path += ".shl"
-        search_paths = [os.getcwd(), os.path.join(os.path.dirname(__file__), "stdlib")]
-        for p in search_paths:
-            full_path = os.path.join(p, path)
-            if os.path.exists(full_path):
-                with open(full_path, "r", encoding="utf-8") as f:
-                    source = f.read()
-                nodes = Parser(source).parse()
-                return self.visit_block(nodes)
-        raise FileNotFoundError(f"Module {node.path} not found")
+        nodes = self._load_module_nodes(node.path)
+        return self.visit_block(nodes)
+
+    def visit_ImportAs(self, node: ImportAs):
+        nodes = self._load_module_nodes(node.path)
+
+        old_env = self.current_env
+        module_env = Environment(parent=self.global_env)
+        self.current_env = module_env
+        try:
+            self.visit_block(nodes)
+        finally:
+            self.current_env = old_env
+
+        module_obj = Module(node.alias, module_env.variables)
+        self.current_env.set(node.alias, module_obj)
+        return module_obj
 
     def visit_ClassDef(self, node: ClassDef):
         self.classes[node.name] = node
@@ -760,6 +787,10 @@ class Interpreter:
                 if i < len(node.properties):
                     prop_name = node.properties[i][0]
                     inst.data[prop_name] = arg
+
+            init_method = inst.get_method("init")
+            if init_method:
+                init_method(inst, *args, **kwargs)
             return inst
 
         self.current_env.set(node.name, constructor)
@@ -767,8 +798,21 @@ class Interpreter:
 
     def visit_Instantiation(self, node: Instantiation):
         cls = self.classes[node.class_name]
+        args = [self.visit(a) for a in node.args]
+        kwargs = {k: self.visit(v) for k, v in node.kwargs} if node.kwargs else {}
+
         inst = Instance(cls, self)
-        self.current_env.set(node.var_name, inst)
+        for i, arg in enumerate(args):
+            if i < len(cls.properties):
+                prop_name = cls.properties[i][0]
+                inst.data[prop_name] = arg
+
+        init_method = inst.get_method("init")
+        if init_method:
+            init_method(inst, *args, **kwargs)
+
+        if node.var_name:
+            self.current_env.set(node.var_name, inst)
         return inst
 
     def visit_PropertyAccess(self, node: PropertyAccess):
@@ -797,7 +841,6 @@ class Interpreter:
     def visit_IndexAccess(self, node: IndexAccess):
         obj = self.visit(node.obj)
 
-        # Handle Slicing
         if isinstance(node.index, Slice):
             start = self.visit(node.index.start) if node.index.start else None
             stop = self.visit(node.index.stop) if node.index.stop else None
@@ -805,7 +848,6 @@ class Interpreter:
 
             return obj[slice(start, stop, step)]
 
-        # Normal indexing
         idx = self.visit(node.index)
         return obj[idx]
 
