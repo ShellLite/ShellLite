@@ -2,6 +2,8 @@
 Unit tests for ShellLite built-in/stdlib behavior.
 """
 
+import os
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -65,6 +67,73 @@ class TestStdLib(unittest.TestCase):
 
         self.assertEqual(env.get("user_name"), "ShellLite User")
         mocked_input.assert_called_once_with("Your name? ")
+
+    def test_builtin_string_helpers(self):
+        cases = [
+            ('result = upper("hello")', "result", "HELLO"),
+            ('result = lower("WORLD")', "result", "world"),
+            ('result = split("a b c")', "result", ["a", "b", "c"]),
+            ('result = split("a,b,c", ",")', "result", ["a", "b", "c"]),
+            ('result = count("banana", "a")', "result", 3),
+            ('result = ord("A")', "result", 65),
+            ("result = char(65)", "result", "A"),
+        ]
+
+        for code, variable, expected in cases:
+            with self.subTest(code=code):
+                env, _, _ = self.run_code(code)
+                self.assertEqual(env.get(variable), expected)
+
+    def test_builtin_list_operations(self):
+        cases = [
+            ("result = sum([1, 2, 3])", "result", 6),
+            ("result = sort([3, 1, 2])", "result", [1, 2, 3]),
+            ("result = contains([1, 2, 3], 2)", "result", True),
+            ("result = contains([1, 2, 3], 9)", "result", False),
+            ("result = empty([])", "result", True),
+            ("result = empty([1])", "result", False),
+            ("result = tuple([1, 2, 3])", "result", (1, 2, 3)),
+        ]
+
+        for code, variable, expected in cases:
+            with self.subTest(code=code):
+                env, _, _ = self.run_code(code)
+                self.assertEqual(env.get(variable), expected)
+
+    def test_builtin_xor(self):
+        env, _, _ = self.run_code("result = xor(5, 3)")
+        self.assertEqual(env.get("result"), 6)
+
+    def test_builtin_add_remove(self):
+        code = "\n".join([
+            "items = [1, 2, 3]",
+            "add(items, 4)",
+            "remove(items, 2)",
+        ])
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("items"), [1, 3, 4])
+
+    def test_builtin_json_roundtrip(self):
+        code = "\n".join([
+            'parsed = json_parse("{\\"a\\": 1, \\"b\\": [2, 3]}")',
+            "text = json_stringify(parsed, 0)",
+        ])
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("parsed"), {"a": 1, "b": [2, 3]})
+        self.assertIn('"a"', env.get("text"))
+
+    def test_builtin_io_helpers(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "sample.txt").replace("\\", "/")
+            code = "\n".join([
+                f'std_io_write("{path}", "hello ")',
+                f'std_io_append("{path}", "world")',
+                f'content = std_io_read("{path}")',
+                f'flag = exists("{path}")',
+            ])
+            env, _, _ = self.run_code(code)
+            self.assertEqual(env.get("content"), "hello world")
+            self.assertTrue(env.get("flag"))
 
 
 if __name__ == "__main__":
