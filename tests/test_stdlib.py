@@ -2,6 +2,8 @@
 Unit tests for ShellLite built-in/stdlib behavior.
 """
 
+import csv
+import json
 import os
 import tempfile
 import unittest
@@ -134,6 +136,84 @@ class TestStdLib(unittest.TestCase):
             env, _, _ = self.run_code(code)
             self.assertEqual(env.get("content"), "hello world")
             self.assertTrue(env.get("flag"))
+
+    def test_builtin_save_json(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "out.json").replace("\\", "/")
+            code = "\n".join([
+                'data = {"name": "shell", "values": [1, 2, 3]}',
+                f'save_json(data, "{path}")',
+            ])
+            self.run_code(code)
+
+            with open(path, encoding="utf-8") as f:
+                loaded = json.load(f)
+            self.assertEqual(loaded, {"name": "shell", "values": [1, 2, 3]})
+
+    def test_builtin_save_csv(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "out.csv").replace("\\", "/")
+            code = "\n".join([
+                'rows = [["name", "age"], ["alice", 30], ["bob", 25]]',
+                f'save_csv(rows, "{path}")',
+            ])
+            self.run_code(code)
+
+            with open(path, encoding="utf-8", newline="") as f:
+                loaded = list(csv.reader(f))
+            self.assertEqual(loaded, [["name", "age"], ["alice", "30"], ["bob", "25"]])
+
+    def test_builtin_serialize(self):
+        env, _, _ = self.run_code('result = serialize([1, "two", 3])')
+        self.assertEqual(env.get("result"), [1, "two", 3])
+
+    def test_builtin_clear_dict(self):
+        code = "\n".join([
+            'data = json_parse("{\\"a\\": 1, \\"b\\": 2}")',
+            "clear_dict(data)",
+        ])
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("data"), {})
+
+    def test_builtin_time_helpers(self):
+        code = "\n".join([
+            "sleep(0)",
+            "now = timestamp()",
+        ])
+        env, _, _ = self.run_code(code)
+        self.assertIsInstance(env.get("now"), float)
+        self.assertGreater(env.get("now"), 0)
+
+    def test_builtin_getattr(self):
+        code = "\n".join([
+            'method = getattr("hello", "upper")',
+            "result = method()",
+        ])
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("result"), "HELLO")
+
+    def test_builtin_html_tags(self):
+        cases = [
+            ('result = str(div("hello"))', "result", "<div>hello</div>"),
+            ("result = str(br())", "result", "<br />"),
+        ]
+
+        for code, variable, expected in cases:
+            with self.subTest(code=code):
+                env, _, _ = self.run_code(code)
+                self.assertEqual(env.get(variable), expected)
+
+    def test_python_interop_proxying(self):
+        code = "\n".join([
+            'use python "math" as m',
+            "root = m.sqrt(16)",
+            "low = m.floor(3.9)",
+        ])
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("root"), 4.0)
+        self.assertIsInstance(env.get("root"), float)
+        self.assertEqual(env.get("low"), 3)
+        self.assertIsInstance(env.get("low"), int)
 
 
 if __name__ == "__main__":
