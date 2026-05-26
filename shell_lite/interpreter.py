@@ -7,10 +7,18 @@ import os
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .ast_nodes import *
 from .parser import Parser
+from .compiler import runtime_lib as rt
+from .runtime_policy import (
+    get_policy,
+    require_fs_read,
+    require_exec,
+    require_py_import,
+    require_py_exec,
+)
 
 
 class ReturnException(Exception):
@@ -185,6 +193,20 @@ class Instance:
         for prop_name, default_node in class_def.properties:
             self.data[prop_name] = interpreter.visit(default_node) if default_node else None
 
+    def __getattr__(self, name):
+        if name in self.data:
+            return self.data[name]
+        method = self.get_method(name)
+        if method:
+            return lambda *args, **kwargs: method(self, *args, **kwargs)
+        raise AttributeError(f"'{self.class_def.name}' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        if name in ('class_def', 'interpreter', 'data'):
+            super().__setattr__(name, value)
+        else:
+            self.data[name] = value
+
     def to_dict(self, visited=None):
         if visited is None:
             visited = set()
@@ -350,7 +372,7 @@ def serialize_runtime_value(value, visited=None):
 def std_json_export(data, path, indent=2):
     serialized = serialize_runtime_value(data)
 
-    with open(path, "w", encoding="utf-8") as f:
+    with rt.open(path, "w", encoding="utf-8") as f:
         json.dump(
             serialized,
             f,
@@ -367,7 +389,7 @@ def validate_csv_rows(data):
         raise SerializationError("CSV export expects a list")
 
     if not data:
-        return "empty"
+        raise SerializationError("CSV export requires a non-empty list")
 
     first = data[0]
 
@@ -383,10 +405,7 @@ def validate_csv_rows(data):
 def std_csv_export(data, path):
     mode = validate_csv_rows(data)
 
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        if mode == "empty":
-            return path
-
+    with rt.open(path, "w", newline="", encoding="utf-8") as f:
         if mode == "dict_rows":
             headers = set()
 
@@ -421,13 +440,16 @@ def std_csv_export(data, path):
 
 class Interpreter:
     def __init__(self):
-        self.safe_mode = os.environ.get("SHL_SAFE") == "1"
+        self.policy = get_policy()
+        self.safe_mode = self.policy.safe_mode
         self._thread_local = threading.local()
         self.global_env = Environment()
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
         self._shared_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        self._module_cache: Dict[str, Module] = {}
+        self._imported_paths: Set[str] = set()
         self.builtins = {
             "str": str,
             "int": lambda x: int(float(x)) if x else 0,
@@ -452,8 +474,8 @@ class Interpreter:
             "false": False,
             "yes": True,
             "no": False,
-            "open": open,
-            "py_exec": exec,
+            "open": rt.open,
+            "py_exec": self._py_exec,
             "tuple": lambda x: tuple(x),
             "getattr": getattr,
             "add": lambda target, item: target.add(item) if isinstance(target, set) else target.append(item),
@@ -468,7 +490,7 @@ class Interpreter:
             "empty": lambda x: len(x) == 0,
             "ord": ord,
             "char": chr,
-            "exists": os.path.exists,
+            "exists": self._exists,
             "json_parse": json.loads,
             "json_stringify": lambda obj, indent=2: json.dumps(
                 serialize_runtime_value(obj),
@@ -477,9 +499,33 @@ class Interpreter:
                 ensure_ascii=False,
             ),
             "contains": lambda obj, item: item in obj,
-            "std_io_read": lambda path: open(path, "r", encoding="utf-8").read(),
-            "std_io_write": lambda path, content: open(path, "w", encoding="utf-8").write(content),
-            "std_io_append": lambda path, content: open(path, "a", encoding="utf-8").write(content),
+            "std_io_read": rt.std_io_read,
+            "std_io_write": rt.std_io_write,
+            "std_io_append": rt.std_io_append,
+            "std_io_exists": rt.std_io_exists,
+            "std_io_delete": rt.std_io_delete,
+            "std_io_copy": rt.std_io_copy,
+            "std_io_rename": rt.std_io_rename,
+            "std_io_mkdir": rt.std_io_mkdir,
+            "std_io_listdir": rt.std_io_listdir,
+            "std_net_get": rt.std_net_get,
+            "std_net_post": rt.std_net_post,
+            "std_web_on_request": rt.std_web_on_request,
+            "std_web_listen": rt.std_web_listen,
+            "std_web_serve_static": rt.std_web_serve_static,
+            "std_db_open": rt.std_db_open,
+            "std_db_close": rt.std_db_close,
+            "std_db_exec": rt.std_db_exec,
+            "std_db_query": rt.std_db_query,
+            "std_db_query_rows": rt.std_db_query_rows,
+            "automation_click": rt.automation_click,
+            "automation_type": rt.automation_type,
+            "automation_press": rt.automation_press,
+            "automation_notify": rt.automation_notify,
+            "clipboard_copy": rt.clipboard_copy,
+            "clipboard_paste": rt.clipboard_paste,
+            "download": rt.download,
+            "convert": rt.convert,
             "clear_dict": lambda d: d.clear(),
         }
         self.web_builder = []
@@ -552,7 +598,7 @@ class Interpreter:
                 if os.environ.get("SHL_DEBUG"):
                     traceback.print_exc()
 
-    def _load_module_nodes(self, path: str, search_paths: Optional[List[str]] = None) -> List[Node]:
+    def _resolve_module_path(self, path: str, search_paths: Optional[List[str]] = None) -> str:
         if not path.endswith(".shl"):
             path += ".shl"
 
@@ -562,11 +608,20 @@ class Interpreter:
         for p in search_paths:
             full_path = os.path.join(p, path)
             if os.path.exists(full_path):
-                with open(full_path, "r", encoding="utf-8") as f:
-                    source = f.read()
-                return Parser(source).parse()
+                return os.path.abspath(full_path)
 
         raise FileNotFoundError(f"Module {path} not found")
+
+    def _load_module_nodes(self, path: str, search_paths: Optional[List[str]] = None) -> List[Node]:
+        abs_path = self._resolve_module_path(path, search_paths)
+        stdlib_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "stdlib"))
+        if abs_path.startswith(stdlib_root):
+            with open(abs_path, "r", encoding="utf-8") as f:
+                source = f.read()
+        else:
+            with rt.open(abs_path, "r", encoding="utf-8") as f:
+                source = f.read()
+        return Parser(source).parse()
 
     def visit(self, node: Node) -> Any:
         if node is None:
@@ -740,12 +795,14 @@ class Interpreter:
             return self.visit_block(node.catch_body)
 
     def visit_PythonImport(self, node: PythonImport):
+        require_py_import(node.module_name)
         module = importlib.import_module(node.module_name)
         wrapper = PythonBridgeWrapper(module, name=node.module_name)
         self.global_env.set(node.alias or node.module_name, wrapper)
         return wrapper
 
     def visit_FromImport(self, node: FromImport):
+        require_py_import(node.module_name)
         module = importlib.import_module(node.module_name)
         for name, alias in node.names:
             attr = getattr(module, name)
@@ -760,12 +817,21 @@ class Interpreter:
         raise SkipException()
 
     def visit_Import(self, node: Import):
+        abs_path = self._resolve_module_path(node.path)
+        if abs_path in self._imported_paths:
+            return None
         nodes = self._load_module_nodes(node.path)
+        self._imported_paths.add(abs_path)
         return self.visit_block(nodes)
 
     def visit_ImportAs(self, node: ImportAs):
-        nodes = self._load_module_nodes(node.path)
+        abs_path = self._resolve_module_path(node.path)
+        cached = self._module_cache.get(abs_path)
+        if cached:
+            self.current_env.set(node.alias, cached)
+            return cached
 
+        nodes = self._load_module_nodes(node.path)
         old_env = self.current_env
         module_env = Environment(parent=self.global_env)
         self.current_env = module_env
@@ -774,7 +840,8 @@ class Interpreter:
         finally:
             self.current_env = old_env
 
-        module_obj = Module(node.alias, module_env.variables)
+        module_obj = Module(os.path.basename(abs_path), module_env.variables)
+        self._module_cache[abs_path] = module_obj
         self.current_env.set(node.alias, module_obj)
         return module_obj
 
@@ -891,19 +958,20 @@ class Interpreter:
 
     def visit_FileRead(self, node: FileRead):
         path = self.visit(node.path)
-        with open(path, "r", encoding="utf-8") as f:
+        with rt.open(path, "r", encoding="utf-8") as f:
             return f.read()
 
     def visit_FileWrite(self, node: FileWrite):
         path = self.visit(node.path)
         content = self.visit(node.content)
-        with open(path, node.mode, encoding="utf-8") as f:
+        with rt.open(path, node.mode, encoding="utf-8") as f:
             f.write(content)
         return None
 
     def visit_Execute(self, node: Execute):
         cmd = self.visit(node.code)
-        return os.system(str(cmd))
+        require_exec(str(cmd))
+        return rt.shl_execute(str(cmd))
 
     def visit_Throw(self, node: Throw):
         msg = self.visit(node.message)
@@ -947,3 +1015,11 @@ class Interpreter:
         except Exception as e:
             print(f"ERROR\n    > {e}")
             return False
+
+    def _py_exec(self, code):
+        require_py_exec()
+        return exec(code)
+
+    def _exists(self, path):
+        require_fs_read(path)
+        return os.path.exists(path)

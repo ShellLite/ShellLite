@@ -59,6 +59,9 @@ from .ast_nodes import (
     TryAlways,
     TypedAssign,
     UnaryOp,
+    UpdateRecords,
+    DeleteRecords,
+    FindRecords,
     VarAccess,
     While,
     Widget,
@@ -349,7 +352,7 @@ class Parser:
             "TRY": self.bind_try,
             "UNLESS": self.bind_unless,
             "UNTIL": self.bind_until,
-            "ON": self.bind_dsl_lowering,
+            "ON": self.bind_on,
             "FUNCTION": self.bind_func,
             "FN": self.bind_func,
             "TO": self.bind_func,
@@ -840,7 +843,7 @@ class Parser:
                     args.append(res_arg)
             return Call(f"std_db_{op}", args)
 
-        if head == "ON" or (head == "WHEN" and any(t.type == "VISITS" for t in tokens)):
+        if head == "ON" or (head == "WHEN" and any(t.type in ("VISITS", "SUBMITS") for t in tokens)):
             # when someone visits "/path" -> on_visit("/", handler)
             path = String("/")
             for t in tokens:
@@ -932,6 +935,74 @@ class Parser:
                     values.append((k, v))
             return InsertRecord(model_name, values)
 
+        if head == "MODEL":
+            name = tokens[1].value
+            fields = []
+            for child in node.children:
+                if len(child.tokens) >= 2:
+                    fields.append((child.tokens[0].value, child.tokens[1].value))
+            return ModelDef(name, fields)
+
+        if head == "CREATE" and len(tokens) > 1 and tokens[1].type == "TABLE":
+            return CreateTable(tokens[2].value)
+
+        if head == "INSERT" and len(tokens) > 1 and tokens[1].type == "INTO":
+            model_name = tokens[2].value
+            values: List[tuple[str, Node]] = []
+            for child in node.children:
+                k = child.tokens[0].value
+                v = self.parse_expr_iterative(child.tokens[1:])
+                if v:
+                    values.append((k, v))
+            return InsertRecord(model_name, values)
+
+        if head == "FIND":
+            model_name = tokens[1].value
+            conditions = []
+            where_idx = -1
+            for i, t in enumerate(tokens):
+                if t.type == "WHERE":
+                    where_idx = i
+                    break
+            if where_idx != -1:
+                cond_tokens = tokens[where_idx + 1:]
+                if len(cond_tokens) >= 3:
+                    k = cond_tokens[0].value
+                    op = cond_tokens[1].value
+                    v = self.parse_expr_iterative(cond_tokens[2:])
+                    if v:
+                        conditions.append((k, op, v))
+            return FindRecords(model_name, conditions, find_all=True)
+
+        if head == "DELETE" and len(tokens) > 1 and tokens[1].type == "FROM":
+            model_name = tokens[2].value
+            conditions = []
+            where_idx = -1
+            for i, t in enumerate(tokens):
+                if t.type == "WHERE":
+                    where_idx = i
+                    break
+            if where_idx != -1:
+                cond_tokens = tokens[where_idx + 1:]
+                if len(cond_tokens) >= 3:
+                    k = cond_tokens[0].value
+                    op = cond_tokens[1].value
+                    v = self.parse_expr_iterative(cond_tokens[2:])
+                    if v:
+                        conditions.append((k, op, v))
+            return DeleteRecords(model_name, conditions)
+
+        if head == "UPDATE":
+            model_name = tokens[1].value
+            updates = []
+            for child in node.children:
+                k = child.tokens[0].value
+                v = self.parse_expr_iterative(child.tokens[1:])
+                if v:
+                    updates.append((k, v))
+            conditions = []
+            return UpdateRecords(model_name, conditions, updates)
+
         # Fallback for other keywords
         return self.bind_call_or_expr(node)
 
@@ -965,7 +1036,7 @@ class Parser:
                 continue
             if t.type == "COLON":
                 break
-            if t.type in ("ID", "FOLDER", "FILE", "PORT", "SERVER", "NAME", "TYPE", "VALUE", "CONTENT"):
+            if t.type in ("ID", "FOLDER", "FILE", "PORT", "SERVER", "NAME", "TYPE", "VALUE", "CONTENT", "MAKE"):
                 arg_name = t.value
                 # Check for `arg as type` pattern
                 if i + 2 < len(token_slice) and token_slice[i + 1].type == "AS" and token_slice[i + 2].type == "ID":
@@ -1315,7 +1386,23 @@ class Parser:
             if t.type == "STRING":
                 path = String(t.value)
                 break
-        body = self.bind_statement_list(node.children)
+        
+        body = []
+        do_idx = -1
+        for i, t in enumerate(tokens):
+            if t.type == "DO":
+                do_idx = i
+                break
+                
+        if do_idx != -1:
+            expr_tokens = tokens[do_idx + 1:]
+            expr = self.parse_expr_iterative(expr_tokens)
+            if expr:
+                body.append(expr)
+                
+        if node.children:
+            body.extend(self.bind_statement_list(node.children))
+            
         return OnRequest(path, body)
 
     def bind_call_or_expr(self, node: GeoNode) -> Node:
@@ -1371,7 +1458,7 @@ class Parser:
                 elif t.type == "NUMBER":
                     val_num = Number(int(t.value) if "." not in t.value else float(t.value))
                     args.append(val_num)
-                elif t.type == "ID":
+                elif t.type in ("ID", "MAKE", "PORT", "FOLDER", "FILE", "SERVER", "NAME", "TYPE", "VALUE", "CONTENT"):
                     args.append(VarAccess(t.value))
                 i += 1
             body = None
@@ -1498,7 +1585,6 @@ class Parser:
                     "OR",
                 )
                 if is_unary:
-                    values.append(Number(0))
                     ops.append("MINUS_UNARY")
                     i += 1
                     continue
@@ -1766,6 +1852,12 @@ class Parser:
                     raise SyntaxError(f"Missing path for 'read' at line {t.line}")
                 values.append(FileRead(res_read))
                 break
+            elif t.type == "EXECUTE" and (i + 1 >= len(tokens) or tokens[i + 1].type != "LPAREN"):
+                res_ex = self.parse_expr_iterative(tokens[i + 1 :], children)
+                if res_ex is None:
+                    raise SyntaxError(f"Missing command for 'execute' at line {t.line}")
+                values.append(Execute(res_ex))
+                break
             elif t.type in (
                 "ID",
                 "ADD",
@@ -1814,6 +1906,7 @@ class Parser:
                 "TYPE",
                 "VALUE",
                 "CONTENT",
+                "MAKE",
             ):
                 new_idx, node_val = self._parse_id_or_call(tokens, i, t)
                 values.append(node_val)

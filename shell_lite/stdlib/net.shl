@@ -1,18 +1,5 @@
-use python "urllib.request" as request
-use python "urllib.parse" as parse
-use python "json" as py_json
+to get url
+    give std_net_get(url)
 
-to std_net_get url
-    response = request.urlopen(url)
-    give response.read().decode("utf-8")
-
-to std_net_post url, data
-    if typeof(data) is "dict"
-        data = py_json.dumps(data).encode("utf-8")
-    elif typeof(data) is "str"
-        data = data.encode("utf-8")
-    
-    req = request.Request(url, data=data, method="POST")
-    req.add_header("Content-Type", "application/json")
-    response = request.urlopen(req)
-    give response.read().decode("utf-8")
+to post url, data
+    give std_net_post(url, data)
