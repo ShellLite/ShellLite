@@ -451,6 +451,15 @@ def compile_file(filename: str, target: str = "python"):
         print(f"Error: File '{filename}' not found.")
         return
 
+    if target.lower() == "llvm":
+        try:
+            from .llvm_backend.builder import build_llvm
+            build_llvm(filename)
+            return
+        except ImportError:
+            print("Error: 'llvmlite' is required for LLVM compilation.")
+            return
+
     print(f"Compiling {filename}...")
 
     try:
