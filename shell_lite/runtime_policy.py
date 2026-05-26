@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
-import os
 from typing import Iterable, List, Mapping, Optional
 from urllib.parse import urlparse
 

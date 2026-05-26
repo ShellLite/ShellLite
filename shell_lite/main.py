@@ -450,62 +450,71 @@ def compile_file(filename: str, target: str = "python"):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
-    
+
     print(f"Compiling {filename}...")
-    
+
     try:
         from .compiler.linker import StaticLinker
+
         stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
         linker = StaticLinker(search_paths=[os.getcwd(), stdlib_path, os.path.dirname(__file__)])
-        
+
         with open(filename, "r", encoding="utf-8") as f:
             source = f.read()
-            
+
         lexer = Lexer(source)
         parser = Parser(lexer.tokenize())
         initial_ast = parser.parse()
-        
+
         print("[1/5] Linking dependencies...")
         linked_ast = linker.link(initial_ast, os.path.abspath(filename))
-        
+
         print("[2/5] Performing semantic analysis...")
         from .compiler.semantic_analyzer import SemanticAnalyzer
+
         analyzer = SemanticAnalyzer()
         analyzer.analyze(linked_ast)
-        
+
         print("[3/5] Optimizing AST...")
         from .compiler.optimizer import Optimizer
+
         optimizer = Optimizer()
         optimized_ast = optimizer.optimize(linked_ast)
-        
+
         print("[4/5] Generating native code...")
         from .compiler.ast_compiler import ASTCompiler
+
         compiler = ASTCompiler()
         python_code = compiler.compile(optimized_ast)
 
         temp_py = filename.replace(".shl", ".py")
         if temp_py == filename:
             temp_py += ".py"
-            
+
         with open(temp_py, "w", encoding="utf-8") as f:
             f.write(python_code)
 
         try:
             import PyInstaller.__main__
+
             print("[5/5] Building standalone executable with PyInstaller...")
-            
-            PyInstaller.__main__.run([
-                temp_py,
-                "--onefile",
-                "--clean",
-                "--name", os.path.splitext(os.path.basename(filename))[0],
-                "--log-level", "WARN"
-            ])
-            
+
+            PyInstaller.__main__.run(
+                [
+                    temp_py,
+                    "--onefile",
+                    "--clean",
+                    "--name",
+                    os.path.splitext(os.path.basename(filename))[0],
+                    "--log-level",
+                    "WARN",
+                ]
+            )
+
             exe_name = os.path.splitext(os.path.basename(filename))[0]
             if sys.platform == "win32":
                 exe_name += ".exe"
-            
+
             print(f"\n[SUCCESS] Built standalone binary: dist/{exe_name}")
 
         except ImportError:

@@ -13,10 +13,12 @@ from .ast_nodes import (
     ClassDef,
     ConstAssign,
     CreateTable,
+    DeleteRecords,
     Dictionary,
     Execute,
     Exit,
     FileRead,
+    FindRecords,
     ForIn,
     FromImport,
     FunctionDef,
@@ -60,8 +62,6 @@ from .ast_nodes import (
     TypedAssign,
     UnaryOp,
     UpdateRecords,
-    DeleteRecords,
-    FindRecords,
     VarAccess,
     While,
     Widget,
@@ -965,7 +965,7 @@ class Parser:
                     where_idx = i
                     break
             if where_idx != -1:
-                cond_tokens = tokens[where_idx + 1:]
+                cond_tokens = tokens[where_idx + 1 :]
                 if len(cond_tokens) >= 3:
                     k = cond_tokens[0].value
                     op = cond_tokens[1].value
@@ -983,7 +983,7 @@ class Parser:
                     where_idx = i
                     break
             if where_idx != -1:
-                cond_tokens = tokens[where_idx + 1:]
+                cond_tokens = tokens[where_idx + 1 :]
                 if len(cond_tokens) >= 3:
                     k = cond_tokens[0].value
                     op = cond_tokens[1].value
@@ -1386,23 +1386,23 @@ class Parser:
             if t.type == "STRING":
                 path = String(t.value)
                 break
-        
+
         body = []
         do_idx = -1
         for i, t in enumerate(tokens):
             if t.type == "DO":
                 do_idx = i
                 break
-                
+
         if do_idx != -1:
-            expr_tokens = tokens[do_idx + 1:]
+            expr_tokens = tokens[do_idx + 1 :]
             expr = self.parse_expr_iterative(expr_tokens)
             if expr:
                 body.append(expr)
-                
+
         if node.children:
             body.extend(self.bind_statement_list(node.children))
-            
+
         return OnRequest(path, body)
 
     def bind_call_or_expr(self, node: GeoNode) -> Node:

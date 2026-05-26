@@ -1,5 +1,7 @@
 from shell_lite.compiler.runtime_lib import *
+
 __SHL_MODULES = {}
+
 
 def main():
 
@@ -42,5 +44,7 @@ def main():
             return True
         else:
             return False
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     main()

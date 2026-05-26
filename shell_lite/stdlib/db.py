@@ -1,5 +1,7 @@
 from shell_lite.compiler.runtime_lib import *
+
 __SHL_MODULES = {}
+
 
 def main():
 
@@ -14,5 +16,7 @@ def main():
 
     def m_16d9b51e2b0b_db_query(sql, params):
         return std_db_query_rows(sql, params)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     main()

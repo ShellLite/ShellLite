@@ -10,14 +10,14 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from .ast_nodes import *
-from .parser import Parser
 from .compiler import runtime_lib as rt
+from .parser import Parser
 from .runtime_policy import (
     get_policy,
-    require_fs_read,
     require_exec,
-    require_py_import,
+    require_fs_read,
     require_py_exec,
+    require_py_import,
 )
 
 
@@ -202,7 +202,7 @@ class Instance:
         raise AttributeError(f"'{self.class_def.name}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name in ('class_def', 'interpreter', 'data'):
+        if name in ("class_def", "interpreter", "data"):
             super().__setattr__(name, value)
         else:
             self.data[name] = value

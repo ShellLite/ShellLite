@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 try:
     import llvmlite.binding as llvm
+    from shell_lite.llvm_backend.codegen import LLVMCompiler
 
     from shell_lite.lexer import Lexer
-    from shell_lite.llvm_backend.codegen import LLVMCompiler
     from shell_lite.parser import Parser
 
     def test_llvm_compilation():

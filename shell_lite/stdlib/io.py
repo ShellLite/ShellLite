@@ -1,5 +1,7 @@
 from shell_lite.compiler.runtime_lib import *
+
 __SHL_MODULES = {}
+
 
 def main():
 
@@ -29,5 +31,7 @@ def main():
 
     def m_d9cb0ed438f8_listdir(path):
         return std_io_listdir(path)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     main()

@@ -1,5 +1,6 @@
-from typing import Dict, Optional, Any
 from enum import Enum, auto
+from typing import Any, Dict, Optional
+
 
 class SymbolType(Enum):
     VARIABLE = auto()
@@ -8,8 +9,17 @@ class SymbolType(Enum):
     MODEL = auto()
     CONSTANT = auto()
 
+
 class Symbol:
-    def __init__(self, name: str, symbol_type: SymbolType, type_info: Any = None, metadata: Dict[str, Any] = None, is_property: bool = False, is_global: bool = False):
+    def __init__(
+        self,
+        name: str,
+        symbol_type: SymbolType,
+        type_info: Any = None,
+        metadata: Dict[str, Any] = None,
+        is_property: bool = False,
+        is_global: bool = False,
+    ):
         self.name = name
         self.symbol_type = symbol_type
         self.type_info = type_info
@@ -17,8 +27,9 @@ class Symbol:
         self.is_property = is_property
         self.is_global = is_global
 
+
 class SymbolTable:
-    def __init__(self, parent: Optional['SymbolTable'] = None):
+    def __init__(self, parent: Optional["SymbolTable"] = None):
         self.parent = parent
         self.symbols: Dict[str, Symbol] = {}
 

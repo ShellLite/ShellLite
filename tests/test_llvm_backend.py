@@ -1,8 +1,8 @@
 import llvmlite.binding as llvm
 import pytest
+from shell_lite.llvm_backend.codegen import LLVMCompiler
 
 from shell_lite.ast_nodes import *
-from shell_lite.llvm_backend.codegen import LLVMCompiler
 
 
 @pytest.fixture(scope="module", autouse=True)

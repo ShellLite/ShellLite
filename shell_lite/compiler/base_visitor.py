@@ -1,9 +1,12 @@
-from typing import Any, List
+from typing import Any
+
 from ..ast_nodes import Node
+
 
 class BaseVisitor:
     def visit(self, node: Node) -> Any:
-        if node is None: return None
+        if node is None:
+            return None
         method_name = f"visit_{type(node).__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
@@ -18,9 +21,11 @@ class BaseVisitor:
                         self.visit(item)
         return None
 
+
 class BaseTransformer:
     def visit(self, node: Node) -> Any:
-        if node is None: return None
+        if node is None:
+            return None
         method_name = f"visit_{type(node).__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
@@ -52,7 +57,8 @@ class BaseTransformer:
                 new_vars[key] = value
 
         if changed:
-            from dataclasses import replace, fields
+            from dataclasses import fields, replace
+
             init_fields = {f.name for f in fields(node) if f.init}
             filtered_vars = {k: v for k, v in new_vars.items() if k in init_fields}
             new_node = replace(node, **filtered_vars)
