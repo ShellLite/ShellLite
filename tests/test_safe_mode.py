@@ -115,11 +115,15 @@ say b.inc()
         m_name = os.path.splitext(os.path.basename(path))[0]
         (build_dir / f"{m_name}.py").write_text(compiler.compile(ast_nodes))
 
-    # Add build_dir parent to sys.path so we can import 'build.main'
+    import sys
 
     monkeypatch.syspath_prepend(str(tmp_path))
 
     import importlib
+
+    for m in ["build.main", "build.mod", "build.__shl_runtime__"]:
+        if m in sys.modules:
+            del sys.modules[m]
 
     # Import the generated main module from the 'build' package
     buf = io.StringIO()

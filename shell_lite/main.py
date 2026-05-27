@@ -676,45 +676,67 @@ For documentation, visit: https://github.com/ShellLite/ShellLite
 def main():
     """CLI entry point: parse command-line arguments and route to appropriate functions."""
     if len(sys.argv) > 1:
-        cmd = sys.argv[1]
-        safe_mode = "--safe" in sys.argv
+        # Improved argument parsing: find the command if it's not the first argument
+        commands = {
+            "compile",
+            "build",
+            "run",
+            "fmt",
+            "format",
+            "check",
+            "test",
+            "resolve",
+            "help",
+            "--help",
+            "-h",
+            "get",
+            "search",
+            "list",
+            "info",
+            "init",
+            "install",
+            "setup-path",
+            "--version",
+            "-v",
+        }
 
-        output_format = None
+        cmd = None
+        args = []
+        for i in range(1, len(sys.argv)):
+            arg = sys.argv[i]
+            if arg in commands and cmd is None:
+                cmd = arg
+            else:
+                args.append(arg)
 
-        if "--fmt" in sys.argv:
-            try:
-                idx = sys.argv.index("--fmt")
-                output_format = sys.argv[idx + 1]
-            except IndexError:
-                print("Error: --fmt requires json or csv")
-                return
-
-        elif "--output-format" in sys.argv:
-            try:
-                idx = sys.argv.index("--output-format")
-                output_format = sys.argv[idx + 1]
-            except IndexError:
-                print("Error: --output-format requires json or csv")
-                return
-
-        if safe_mode:
-            os.environ["SHL_SAFE"] = "1"
-            sys.argv.remove("--safe")
-            reset_policy_cache()
+        if cmd is None:
+            # Default to 'run' if first arg exists and is a file
+            if args and os.path.exists(args[0]):
+                cmd = "run"
+            else:
+                cmd = "help"
 
         if cmd == "compile" or cmd == "build":
-            if len(sys.argv) > 2:
-                filename = sys.argv[2]
+            if args:
+                filename = args[0]
                 target = "python"
                 if "--target" in sys.argv:
                     try:
                         idx = sys.argv.index("--target")
                         target = sys.argv[idx + 1]
-                    except IndexError:
+                    except (IndexError, ValueError):
                         pass
-                compile_file(filename, target)
+                if os.path.isdir(filename):
+                    # Compile all .shl files in the directory
+                    for root, _, files in os.walk(filename):
+                        for f in files:
+                            if f.endswith(".shl"):
+                                compile_file(os.path.join(root, f), target)
+                else:
+                    compile_file(filename, target)
             else:
                 print("Usage: shl compile <filename> [--target python]")
+
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "--version" or cmd == "-v":
