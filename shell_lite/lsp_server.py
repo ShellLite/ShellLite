@@ -320,7 +320,7 @@ class LSPServer:
                         "renameProvider": True,
                         "referencesProvider": True,
                     },
-                    "serverInfo": {"name": "ShellLite Enhanced LSP", "version": "0.6.2.1"},
+                    "serverInfo": {"name": "ShellLite Enhanced LSP", "version": "0.6.3"},
                 },
             )
         elif method == "textDocument/didOpen":
