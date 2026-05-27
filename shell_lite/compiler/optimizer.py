@@ -1,12 +1,14 @@
-from typing import List
+from typing import Dict, List, Union
 
 from ..ast_nodes import *
 from .base_visitor import BaseTransformer
 
 
 class Optimizer(BaseTransformer):
-    def optimize(self, ast: List[Node]) -> List[Node]:
-        return [self.visit(stmt) for stmt in ast]
+    def optimize(self, ast_or_map: Union[List[Node], Dict[str, List[Node]]]) -> Union[List[Node], Dict[str, List[Node]]]:
+        if isinstance(ast_or_map, dict):
+            return {path: [self.visit(stmt) for stmt in ast] for path, ast in ast_or_map.items()}
+        return [self.visit(stmt) for stmt in ast_or_map]
 
     def visit_BinOp(self, node: BinOp) -> Node:
         left = self.visit(node.left)

@@ -16,7 +16,7 @@ import threading
 import urllib.request
 import zipfile
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from shell_lite.runtime_policy import (
     get_policy,
@@ -32,7 +32,7 @@ from shell_lite.runtime_policy import (
 )
 
 __executor = concurrent.futures.ThreadPoolExecutor(max_workers=32)
-__locks = {}
+__locks: Dict[str, threading.Lock] = {}
 __locks_guard = threading.Lock()
 _original_import = builtins.__import__
 
@@ -141,7 +141,7 @@ class ShellLiteObject:
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
 
-__html_buffer = []
+__html_buffer: list[str] = []
 
 
 def __emit_html(s):
@@ -231,7 +231,7 @@ def std_web_on_request(path, handler, body=None):
 
 
 _db_conn = None
-_db_models = {}
+_db_models: Dict[str, list[tuple[str, str]]] = {}
 _db_path = "shell_lite.db"
 _identifier_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -281,7 +281,7 @@ def std_db_close():
         _db_conn = None
 
 
-def std_db_exec(query: str, params: list = None):
+def std_db_exec(query: str, params: Optional[list[Any]] = None):
     require_db()
     conn = _get_db()
     cur = conn.cursor()
@@ -290,7 +290,7 @@ def std_db_exec(query: str, params: list = None):
     return cur.rowcount
 
 
-def std_db_query_rows(query: str, params: list = None):
+def std_db_query_rows(query: str, params: Optional[list[Any]] = None):
     require_db()
     conn = _get_db()
     cur = conn.cursor()
@@ -370,8 +370,8 @@ def std_db_delete(model_name: str, conds: list):
     std_db_query(f"DELETE FROM {model_name}{w}", *v)
 
 
-_web_handlers = {}
-_static_routes = {}
+_web_handlers: Dict[str, Callable[[], Any]] = {}
+_static_routes: Dict[str, str] = {}
 
 
 class ShellLiteHTTPHandler(BaseHTTPRequestHandler):
@@ -413,11 +413,6 @@ class ShellLiteHTTPHandler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
-
-
-def std_web_on_request(path: str, handler: Callable):
-    require_web()
-    _web_handlers[path] = handler
 
 
 def std_web_listen(port: int):
@@ -472,7 +467,7 @@ def extract(s: str, t: str):
         z.extractall(t)
 
 
-def download(u: str, p: str = None):
+def download(u: str, p: Optional[str] = None):
     require_net(u)
     if p is None:
         p = os.path.basename(u)
@@ -681,7 +676,7 @@ def confirm(msg):
     return input(f"[CONFIRM] {msg} (y/n): ").lower().startswith("y")
 
 
-def button(l):
+def ui_button(l):
     print(f"[UI] Button: {l}")
 
 

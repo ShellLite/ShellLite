@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 from contextlib import redirect_stdout
 
 import pytest
@@ -34,6 +35,9 @@ def compile_code(source: str, filename: str, search_paths):
     linked = linker.link(initial_ast, os.path.abspath(filename))
     SemanticAnalyzer().analyze(linked)
     optimized = Optimizer().optimize(linked)
+    if isinstance(optimized, dict):
+        main_path = os.path.abspath(filename)
+        return ASTCompiler().compile(optimized[main_path])
     return ASTCompiler().compile(optimized)
 
 
@@ -87,8 +91,39 @@ import "{mod_path.as_posix()}" as b
 say a.inc()
 say b.inc()
 '''
-    python_code = compile_code(source, str(tmp_path / "main.shl"), [str(tmp_path)])
+    # Create a build directory to simulate a package
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+    (build_dir / "__init__.py").write_text("")
+
+    lexer = Lexer(source)
+    parser = Parser(lexer.tokenize())
+    initial_ast = parser.parse()
+    linker = StaticLinker(search_paths=[str(tmp_path)])
+    linked = linker.link(initial_ast, os.path.abspath(str(tmp_path / "main.shl")))
+
+    SemanticAnalyzer().analyze(linked)
+    optimizer = Optimizer()
+    optimized = optimizer.optimize(linked)
+
+    compiler = ASTCompiler()
+    # Copy runtime library
+    runtime_src = os.path.join(os.path.dirname(os.path.dirname(__file__)), "shell_lite", "compiler", "runtime_lib.py")
+    shutil.copy(runtime_src, build_dir / "__shl_runtime__.py")
+
+    for path, ast_nodes in optimized.items():
+        m_name = os.path.splitext(os.path.basename(path))[0]
+        (build_dir / f"{m_name}.py").write_text(compiler.compile(ast_nodes))
+
+    # Add build_dir parent to sys.path so we can import 'build.main'
+
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    import importlib
+
+    # Import the generated main module from the 'build' package
     buf = io.StringIO()
     with redirect_stdout(buf):
-        exec(python_code, {"__name__": "__main__"})
+        importlib.import_module("build.main")
+
     assert buf.getvalue().strip().splitlines() == ["1", "2"]

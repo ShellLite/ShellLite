@@ -189,13 +189,13 @@ class Parser:
         for token in self.tokens:
             if token.type == "EOF":
                 break
-            if token.type == "INDENT":
+            if token.type == "INDENT" or token.type == "LBRACE":
                 p_push = current_node if current_node else last_line_node
                 if p_push:
                     block_stack.append(p_push)
                 current_node = None
                 continue
-            if token.type == "DEDENT":
+            if token.type == "DEDENT" or token.type == "RBRACE":
                 if block_stack:
                     block_stack.pop()
                 continue
@@ -935,27 +935,6 @@ class Parser:
                     values.append((k, v))
             return InsertRecord(model_name, values)
 
-        if head == "MODEL":
-            name = tokens[1].value
-            fields = []
-            for child in node.children:
-                if len(child.tokens) >= 2:
-                    fields.append((child.tokens[0].value, child.tokens[1].value))
-            return ModelDef(name, fields)
-
-        if head == "CREATE" and len(tokens) > 1 and tokens[1].type == "TABLE":
-            return CreateTable(tokens[2].value)
-
-        if head == "INSERT" and len(tokens) > 1 and tokens[1].type == "INTO":
-            model_name = tokens[2].value
-            values: List[tuple[str, Node]] = []
-            for child in node.children:
-                k = child.tokens[0].value
-                v = self.parse_expr_iterative(child.tokens[1:])
-                if v:
-                    values.append((k, v))
-            return InsertRecord(model_name, values)
-
         if head == "FIND":
             model_name = tokens[1].value
             conditions = []
@@ -1034,7 +1013,7 @@ class Parser:
             if t.type == "USING" or t.type == "COMMA":
                 i += 1
                 continue
-            if t.type == "COLON":
+            if t.type == "COLON" or t.type == "LBRACE":
                 break
             if t.type in ("ID", "FOLDER", "FILE", "PORT", "SERVER", "NAME", "TYPE", "VALUE", "CONTENT", "MAKE"):
                 arg_name = t.value

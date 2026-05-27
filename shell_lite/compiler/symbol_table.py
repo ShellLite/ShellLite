@@ -16,7 +16,7 @@ class Symbol:
         name: str,
         symbol_type: SymbolType,
         type_info: Any = None,
-        metadata: Dict[str, Any] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         is_property: bool = False,
         is_global: bool = False,
     ):

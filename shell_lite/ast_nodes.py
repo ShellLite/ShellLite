@@ -326,6 +326,11 @@ class FileRead(Node):
 
 
 @dataclass
+class FileExists(Node):
+    path: Node
+
+
+@dataclass
 class DatabaseOp(Node):
     op: str
     args: List[Node]

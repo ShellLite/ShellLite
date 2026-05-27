@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 import traceback
-from typing import Optional
+from typing import Dict, List, Optional
 
 from .ast_nodes import (
     Assign,
@@ -453,7 +453,7 @@ def compile_file(filename: str, target: str = "python"):
 
     if target.lower() == "llvm":
         try:
-            from .llvm_backend.builder import build_llvm
+            from .llvm_backend.builder import build_llvm  # type: ignore[import-untyped, import-not-found]
 
             build_llvm(filename)
             return
@@ -488,7 +488,10 @@ def compile_file(filename: str, target: str = "python"):
 
         print("[3/5] Optimizing AST...")
         optimizer = Optimizer()
-        optimized_modules = {path: optimizer.optimize(ast) for path, ast in module_map.items()}
+        res_opt = optimizer.optimize(module_map)
+        if not isinstance(res_opt, dict):
+            raise RuntimeError("Optimizer returned unexpected type")
+        optimized_modules: Dict[str, List[Node]] = res_opt
 
         print("[4/5] Generating native package...")
         compiler = ASTCompiler()
@@ -519,7 +522,7 @@ def compile_file(filename: str, target: str = "python"):
         main_py = os.path.join(out_dir, f"{base_name}.py")
 
         try:
-            import PyInstaller.__main__
+            import PyInstaller.__main__  # type: ignore[import]
 
             print("[5/5] Building standalone executable with PyInstaller...")
 

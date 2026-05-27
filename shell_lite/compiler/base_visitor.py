@@ -1,10 +1,10 @@
-from typing import Any
+from typing import Any, Optional
 
 from ..ast_nodes import Node
 
 
 class BaseVisitor:
-    def visit(self, node: Node) -> Any:
+    def visit(self, node: Optional[Node]) -> Any:
         if node is None:
             return None
         method_name = f"visit_{type(node).__name__}"
@@ -23,14 +23,14 @@ class BaseVisitor:
 
 
 class BaseTransformer:
-    def visit(self, node: Node) -> Any:
+    def visit(self, node: Optional[Node]) -> Any:
         if node is None:
             return None
         method_name = f"visit_{type(node).__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: Node) -> Node:
+    def generic_visit(self, node: Node) -> Any:
         new_vars = {}
         changed = False
         for key, value in vars(node).items():

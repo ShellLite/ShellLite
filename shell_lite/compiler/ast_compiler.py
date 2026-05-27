@@ -77,7 +77,7 @@ class ASTCompiler(BaseVisitor):
         return ast.Call(func=ast.Name(id="std_io_exists", ctx=ast.Load()), args=[self.visit(node.path)], keywords=[])
 
     def visit_Execute(self, node: Execute):
-        return ast.Call(func=ast.Name(id="shl_execute", ctx=ast.Load()), args=[self.visit(node.command)], keywords=[])
+        return ast.Call(func=ast.Name(id="shl_execute", ctx=ast.Load()), args=[self.visit(node.code)], keywords=[])
 
     def visit_TypedAssign(self, node: TypedAssign):
         if hasattr(node, "symbol_ref") and node.symbol_ref and getattr(node.symbol_ref, "is_global", False):
@@ -163,11 +163,11 @@ class ASTCompiler(BaseVisitor):
         }
         if node.op in ("and", "or"):
             return ast.BoolOp(op=ast.And() if node.op == "and" else ast.Or(), values=[left, right])
-        mapped = op_map.get(node.op, ast.Eq())
+        mapped: ast.AST = op_map.get(node.op, ast.Eq())
         return (
             ast.Compare(left=left, ops=[mapped], comparators=[right])
             if isinstance(mapped, ast.cmpop)
-            else ast.BinOp(left=left, op=mapped, right=right)
+            else ast.BinOp(left=left, op=mapped, right=right)  # type: ignore[arg-type]
         )
 
     def visit_UnaryOp(self, node: UnaryOp):
@@ -179,7 +179,7 @@ class ASTCompiler(BaseVisitor):
         return right
 
     def visit_FunctionDef(self, node: FunctionDef):
-        body = []
+        body: List[ast.stmt] = []
         global_vars = set()
 
         def find_globals(stmts):
@@ -258,7 +258,9 @@ class ASTCompiler(BaseVisitor):
 
             if "." in py_func_name:
                 parts = py_func_name.split(".")
-                func_obj = ast.Attribute(value=ast.Name(id=parts[0], ctx=ast.Load()), attr=parts[1], ctx=ast.Load())
+                func_obj: ast.expr = ast.Attribute(
+                    value=ast.Name(id=parts[0], ctx=ast.Load()), attr=parts[1], ctx=ast.Load()
+                )
             else:
                 func_obj = ast.Name(id=py_func_name, ctx=ast.Load())
 
@@ -327,17 +329,15 @@ class ASTCompiler(BaseVisitor):
     def visit_PythonImport(self, node: PythonImport):
         level = 1 if node.module_name.startswith(".") else 0
         mod_name = node.module_name.lstrip(".") if level > 0 else node.module_name
-        return (
-            ast.ImportFrom(
-                module=mod_name,
-                names=[ast.alias(name="*", asname=None)]
-                if node.alias is None
-                else [ast.alias(name=mod_name, asname=node.alias)],
+
+        if level > 0:
+            return ast.ImportFrom(
+                module="" if node.alias else mod_name,
+                names=[ast.alias(name=mod_name if node.alias else "*", asname=node.alias)],
                 level=level,
             )
-            if node.alias is None and level > 0
-            else (ast.Import(names=[ast.alias(name=node.module_name, asname=node.alias)]))
-        )
+
+        return ast.Import(names=[ast.alias(name=node.module_name, asname=node.alias)])
 
     def visit_FromImport(self, node: FromImport):
         return ast.ImportFrom(module=node.module_name, names=[ast.alias(name=n, asname=a) for n, a in node.names], level=0)
@@ -390,15 +390,16 @@ class ASTCompiler(BaseVisitor):
                 )
             )
 
+        init_method_body: List[ast.stmt] = list(init_body) if init_body else [ast.Pass()]
         init_method = ast.FunctionDef(
             name="__init__",
             args=ast.arguments(posonlyargs=[], args=init_args, kwonlyargs=[], kw_defaults=[], defaults=init_defaults),
-            body=init_body or [ast.Pass()],
+            body=init_method_body,
             decorator_list=[],
             returns=None,
         )
 
-        body = [init_method]
+        body: List[ast.stmt] = [init_method]
         for m in node.methods:
             m_args = [ast.arg(arg="self")] + [ast.arg(arg=a[0]) for a in m.args]
             m_body = self.visit_block(m.body)
