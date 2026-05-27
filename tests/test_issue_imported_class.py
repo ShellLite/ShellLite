@@ -95,3 +95,27 @@ say u.greet("World")
     run_code(code)
     captured = capsys.readouterr()
     assert captured.out.strip() == "Hello, World"
+
+
+def test_import_as_shared_state(tmp_path, capsys):
+    module_shl = tmp_path / "stateful.shl"
+    module_shl.write_text(
+        """
+counter = 0
+fn inc() {
+    counter = counter + 1
+    return counter
+}
+""",
+        encoding="utf-8",
+    )
+
+    code = f"""
+import "{module_shl.as_posix()}" as a
+import "{module_shl.as_posix()}" as b
+say a.inc()
+say b.inc()
+"""
+    run_code(code)
+    captured = capsys.readouterr()
+    assert captured.out.strip().splitlines() == ["1", "2"]
