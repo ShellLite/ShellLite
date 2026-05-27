@@ -1,5 +1,5 @@
 import ast
-from typing import List
+from typing import List, Optional
 
 from ..ast_nodes import *
 from .base_visitor import BaseVisitor
@@ -13,13 +13,16 @@ class ASTCompiler(BaseVisitor):
         self.tmp_counter += 1
         return f"__shl_tmp_{self.tmp_counter}"
 
-    def compile(self, statements: List[Node]) -> str:
-        module_body = [
-            ast.ImportFrom(module="shell_lite.compiler.runtime_lib", names=[ast.alias(name="*", asname=None)], level=0),
-            ast.Assign(targets=[ast.Name(id="__SHL_MODULES", ctx=ast.Store())], value=ast.Dict(keys=[], values=[])),
-        ]
+    def compile(self, statements: List[Node], preamble: Optional[List[ast.stmt]] = None) -> str:
+        if preamble is None:
+            preamble = [
+                ast.ImportFrom(module="__shl_runtime__", names=[ast.alias(name="*", asname=None)], level=1),
+                ast.Assign(targets=[ast.Name(id="__SHL_MODULES", ctx=ast.Store())], value=ast.Dict(keys=[], values=[])),
+            ]
 
+        module_body = list(preamble)
         module_body.extend(self.visit_block(statements))
+        
         module = ast.Module(body=module_body, type_ignores=[])
         ast.fix_missing_locations(module)
         return ast.unparse(module)
@@ -196,10 +199,23 @@ class ASTCompiler(BaseVisitor):
             body.append(ast.Global(names=list(global_vars)))
 
         body.extend(self.visit_block(node.body))
+
+        # Handle default arguments
+        args = []
+        defaults = []
+        for arg_name, default_node, type_hint in node.args:
+            args.append(ast.arg(arg=arg_name))
+            if default_node is not None:
+                defaults.append(self.visit(default_node))
+
         return ast.FunctionDef(
             name=node.name,
             args=ast.arguments(
-                posonlyargs=[], args=[ast.arg(arg=a[0]) for a in node.args], kwonlyargs=[], kw_defaults=[], defaults=[]
+                posonlyargs=[],
+                args=args,
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=defaults,
             ),
             body=body,
             decorator_list=[],
@@ -207,7 +223,26 @@ class ASTCompiler(BaseVisitor):
         )
 
     def visit_Call(self, node: Call):
-        mapped = {"print": "print", "say": "print", "ask": "input", "len": "len", "str": "str", "int": "int"}
+        from .builtins import BUILTINS
+        
+        # Check registry for name mapping
+        mapping = BUILTINS.get(node.name)
+        py_func_name = mapping.py_name if mapping else node.name
+        
+        # Handle special cases that translate to operators/expressions
+        if node.name == "xor" and len(node.args) == 2:
+            return ast.BinOp(left=self.visit(node.args[0]), op=ast.BitXor(), right=self.visit(node.args[1]))
+        if node.name == "empty" and len(node.args) == 1:
+            return ast.Compare(
+                left=ast.Call(func=ast.Name(id="len", ctx=ast.Load()), args=[self.visit(node.args[0])], keywords=[]),
+                ops=[ast.Eq()],
+                comparators=[ast.Constant(value=0)],
+            )
+        if node.name == "contains" and len(node.args) == 2:
+            return ast.Compare(
+                left=self.visit(node.args[1]), ops=[ast.In()], comparators=[self.visit(node.args[0])]
+            )
+
         args = [self.visit(a) for a in node.args]
         keywords = [ast.keyword(arg=k, value=self.visit(v)) for k, v in (node.kwargs or [])]
 
@@ -222,16 +257,32 @@ class ASTCompiler(BaseVisitor):
                 returns=None,
             )
             keywords.append(ast.keyword(arg="body", value=ast.Name(id=body_func_name, ctx=ast.Load())))
+            
+            if "." in py_func_name:
+                parts = py_func_name.split(".")
+                func_obj = ast.Attribute(value=ast.Name(id=parts[0], ctx=ast.Load()), attr=parts[1], ctx=ast.Load())
+            else:
+                func_obj = ast.Name(id=py_func_name, ctx=ast.Load())
+
             return [
                 body_def,
                 ast.Expr(
                     value=ast.Call(
-                        func=ast.Name(id=mapped.get(node.name, node.name), ctx=ast.Load()), args=args, keywords=keywords
+                        func=func_obj, args=args, keywords=keywords
                     )
                 ),
             ]
 
-        return ast.Call(func=ast.Name(id=mapped.get(node.name, node.name), ctx=ast.Load()), args=args, keywords=keywords)
+        if "." in py_func_name:
+            parts = py_func_name.split(".")
+            # Special case for str.upper/str.lower - call on the object
+            if parts[0] == "str" and len(args) == 1:
+                return ast.Call(func=ast.Attribute(value=args[0], attr=parts[1], ctx=ast.Load()), args=[], keywords=[])
+            func_obj = ast.Attribute(value=ast.Name(id=parts[0], ctx=ast.Load()), attr=parts[1], ctx=ast.Load())
+        else:
+            func_obj = ast.Name(id=py_func_name, ctx=ast.Load())
+
+        return ast.Call(func=func_obj, args=args, keywords=keywords)
 
     def visit_If(self, node: If):
         return ast.If(
@@ -280,7 +331,22 @@ class ASTCompiler(BaseVisitor):
         )
 
     def visit_PythonImport(self, node: PythonImport):
-        return ast.Import(names=[ast.alias(name=node.module_name, asname=node.alias)])
+        level = 1 if node.module_name.startswith(".") else 0
+        mod_name = node.module_name.lstrip(".") if level > 0 else node.module_name
+        return ast.ImportFrom(
+            module=mod_name,
+            names=[ast.alias(name="*", asname=None)] if node.alias is None else [ast.alias(name=mod_name, asname=node.alias)],
+            level=level
+        ) if node.alias is None and level > 0 else (
+            ast.Import(names=[ast.alias(name=node.module_name, asname=node.alias)])
+        )
+
+    def visit_FromImport(self, node: FromImport):
+        return ast.ImportFrom(
+            module=node.module_name,
+            names=[ast.alias(name=n, asname=a) for n, a in node.names],
+            level=0
+        )
 
     def visit_ForIn(self, node: ForIn):
         return ast.For(

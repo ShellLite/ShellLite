@@ -464,6 +464,9 @@ def compile_file(filename: str, target: str = "python"):
 
     try:
         from .compiler.linker import StaticLinker
+        from .compiler.semantic_analyzer import SemanticAnalyzer
+        from .compiler.optimizer import Optimizer
+        from .compiler.ast_compiler import ASTCompiler
 
         stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
         linker = StaticLinker(search_paths=[os.getcwd(), stdlib_path, os.path.dirname(__file__)])
@@ -476,32 +479,43 @@ def compile_file(filename: str, target: str = "python"):
         initial_ast = parser.parse()
 
         print("[1/5] Linking dependencies...")
-        linked_ast = linker.link(initial_ast, os.path.abspath(filename))
+        module_map = linker.link(initial_ast, os.path.abspath(filename))
 
         print("[2/5] Performing semantic analysis...")
-        from .compiler.semantic_analyzer import SemanticAnalyzer
-
         analyzer = SemanticAnalyzer()
-        analyzer.analyze(linked_ast)
+        analyzer.analyze(module_map)
 
         print("[3/5] Optimizing AST...")
-        from .compiler.optimizer import Optimizer
-
         optimizer = Optimizer()
-        optimized_ast = optimizer.optimize(linked_ast)
+        optimized_modules = {path: optimizer.optimize(ast) for path, ast in module_map.items()}
 
-        print("[4/5] Generating native code...")
-        from .compiler.ast_compiler import ASTCompiler
-
+        print("[4/5] Generating native package...")
         compiler = ASTCompiler()
-        python_code = compiler.compile(optimized_ast)
+        
+        # Determine output directory
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        out_dir = os.path.join(os.getcwd(), f"{base_name}_build")
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
+        os.makedirs(out_dir)
 
-        temp_py = filename.replace(".shl", ".py")
-        if temp_py == filename:
-            temp_py += ".py"
+        # Copy runtime library
+        runtime_src = os.path.join(os.path.dirname(__file__), "compiler", "runtime_lib.py")
+        runtime_dest = os.path.join(out_dir, "__shl_runtime__.py")
+        shutil.copy(runtime_src, runtime_dest)
 
-        with open(temp_py, "w", encoding="utf-8") as f:
-            f.write(python_code)
+        # Create __init__.py
+        with open(os.path.join(out_dir, "__init__.py"), "w") as f:
+            f.write("")
+
+        # Compile each module
+        for path, ast_nodes in optimized_modules.items():
+            python_code = compiler.compile(ast_nodes)
+            mod_name = os.path.splitext(os.path.basename(path))[0]
+            with open(os.path.join(out_dir, f"{mod_name}.py"), "w", encoding="utf-8") as f:
+                f.write(python_code)
+
+        main_py = os.path.join(out_dir, f"{base_name}.py")
 
         try:
             import PyInstaller.__main__
@@ -510,17 +524,18 @@ def compile_file(filename: str, target: str = "python"):
 
             PyInstaller.__main__.run(
                 [
-                    temp_py,
+                    main_py,
                     "--onefile",
                     "--clean",
                     "--name",
-                    os.path.splitext(os.path.basename(filename))[0],
+                    base_name,
                     "--log-level",
                     "WARN",
+                    f"--paths={out_dir}"
                 ]
             )
 
-            exe_name = os.path.splitext(os.path.basename(filename))[0]
+            exe_name = base_name
             if sys.platform == "win32":
                 exe_name += ".exe"
 
@@ -528,7 +543,7 @@ def compile_file(filename: str, target: str = "python"):
 
         except ImportError:
             print("\n[NOTICE] PyInstaller not found. To build standalone binaries, run: pip install pyinstaller")
-            print(f"[SUCCESS] Transpiled script available at: {temp_py}")
+            print(f"[SUCCESS] Modular package available at: {out_dir}")
 
     except Exception as e:
         print(f"\n[COMPILATION FAILED] {e}")

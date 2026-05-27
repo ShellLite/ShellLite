@@ -1,41 +1,61 @@
+import os
 from enum import Enum, auto
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
-from ..ast_nodes import *
-from .base_visitor import BaseVisitor
+from ..ast_nodes import (
+    Assign,
+    BinOp,
+    Boolean,
+    Call,
+    ClassDef,
+    ConstAssign,
+    Dictionary,
+    ForIn,
+    FunctionDef,
+    IndexAccess,
+    Instantiation,
+    ListVal,
+    ModelDef,
+    Node,
+    Number,
+    Return,
+    Skip,
+    Stop,
+    String,
+    Try,
+    TryAlways,
+    TypedAssign,
+    UnaryOp,
+    VarAccess,
+    While,
+    PythonImport,
+    FromImport,
+    If,
+)
+from .base_visitor import BaseTransformer
 from .symbol_table import Symbol, SymbolTable, SymbolType
+from .builtins import BUILTINS
 
 
 class TypeKind(Enum):
     INT = auto()
+    FLOAT = auto()
     STR = auto()
     BOOL = auto()
-    FLOAT = auto()
-    OBJECT = auto()
     LIST = auto()
     DICT = auto()
+    OBJECT = auto()
     NONE = auto()
     UNKNOWN = auto()
 
 
 class Type:
-    def __init__(self, kind: TypeKind, class_name: Optional[str] = None, element_type: Optional["Type"] = None):
+    def __init__(self, kind: TypeKind, class_name: Optional[str] = None):
         self.kind = kind
         self.class_name = class_name
-        self.element_type = element_type
-
-    def __eq__(self, other):
-        if not isinstance(other, Type):
-            return False
-        return self.kind == other.kind and self.class_name == other.class_name and self.element_type == other.element_type
 
     def __repr__(self):
-        res = f"{self.kind.name}"
-        if self.class_name:
-            res += f"({self.class_name})"
-        if self.element_type:
-            res += f"[{self.element_type}]"
-        return res
+        return f"{self.kind.name}" + (f"({self.class_name})" if self.class_name else "")
 
 
 class CompileError(Exception):
@@ -44,12 +64,13 @@ class CompileError(Exception):
         self.line = line
 
 
-class SemanticAnalyzer(BaseVisitor):
+class SemanticAnalyzer(BaseTransformer):
     def __init__(self):
-        self.global_scope = SymbolTable()
-        self.current_scope = self.global_scope
-        self.classes: Dict[str, ClassDef] = {}
+        self.module_scopes: Dict[str, SymbolTable] = {}
+        self.classes: Dict[str, Dict[str, ClassDef]] = {}
         self.context_stack: List[str] = ["GLOBAL"]
+        self.current_mod_path: str = ""
+        self.path_map: Dict[str, str] = {}
 
         self.T_INT = Type(TypeKind.INT)
         self.T_STR = Type(TypeKind.STR)
@@ -58,149 +79,68 @@ class SemanticAnalyzer(BaseVisitor):
         self.T_NONE = Type(TypeKind.NONE)
         self.T_UNKNOWN = Type(TypeKind.UNKNOWN)
 
-        builtins = {
-            "print": -1,
-            "say": -1,
-            "ask": 1,
-            "len": 1,
-            "str": 1,
-            "int": 1,
-            "float": 1,
-            "bool": 1,
-            "abs": 1,
-            "typeof": 1,
-            "range": -1,
-            "max": -1,
-            "min": -1,
-            "add": 2,
-            "remove": 2,
-            "xor": 2,
-            "empty": 1,
-            "contains": 2,
-            "split": -1,
-            "upper": 1,
-            "lower": 1,
-            "sort": 1,
-            "count": -1,
-            "ord": 1,
-            "char": 1,
-            "json_parse": 1,
-            "json_stringify": -1,
-            "pop": -1,
-            "clear_dict": 1,
-            "add": 2,
-            "remove": 2,
-            "shl_execute": 1,
-            "shl_parallel": 1,
-            "std_io_read": 1,
-            "std_io_write": 2,
-            "std_io_append": 2,
-            "std_io_exists": 1,
-            "std_io_delete": 1,
-            "std_io_copy": 2,
-            "std_io_rename": 2,
-            "std_io_mkdir": 1,
-            "std_io_listdir": 1,
-            "std_net_get": 1,
-            "std_net_post": 2,
-            "std_web_on_request": -1,
-            "std_web_listen": 1,
-            "std_web_serve_static": 2,
-            "std_db_query": -1,
-            "std_db_open": 1,
-            "std_db_close": 0,
-            "std_db_exec": -1,
-            "std_db_query_rows": -1,
-            "std_db_model": 2,
-            "std_db_create_table": 1,
-            "std_db_insert": 2,
-            "std_db_find": -1,
-            "std_db_update": 3,
-            "std_db_delete": 2,
-            "automation_click": 2,
-            "automation_type": 1,
-            "automation_press": 1,
-            "automation_notify": 2,
-            "clipboard_copy": 1,
-            "clipboard_paste": 0,
-            "html": -1,
-            "head": -1,
-            "body": -1,
-            "div": -1,
-            "span": -1,
-            "a": -1,
-            "img": -1,
-            "ul": -1,
-            "ol": -1,
-            "li": -1,
-            "button": -1,
-            "input": -1,
-            "form": -1,
-            "table": -1,
-            "tr": -1,
-            "td": -1,
-            "h1": -1,
-            "h2": -1,
-            "h3": -1,
-            "h4": -1,
-            "h5": -1,
-            "h6": -1,
-            "link": -1,
-            "meta": -1,
-            "script": -1,
-            "footer": -1,
-            "header": -1,
-            "nav": -1,
-            "textarea": -1,
-            "label": -1,
-            "section": -1,
-            "article": -1,
-            "main": -1,
-            "aside": -1,
-            "p": -1,
-            "strong": -1,
-            "br": -1,
-            "hr": -1,
-            "title": -1,
-            "style": -1,
-            "blockquote": -1,
-            "pre": -1,
-            "code": -1,
-            "redirect": 1,
-            "render": 1,
-        }
-        for name, count in builtins.items():
-            self.global_scope.define(name, Symbol(name, SymbolType.FUNCTION, self.T_UNKNOWN, {"arg_count": count}))
+    def _create_global_scope(self) -> SymbolTable:
+        scope = SymbolTable()
+        for name, mapping in BUILTINS.items():
+            scope.define(
+                name,
+                Symbol(
+                    name,
+                    SymbolType.FUNCTION,
+                    self.T_UNKNOWN,
+                    {"min_args": mapping.min_args, "max_args": mapping.max_args},
+                ),
+            )
+        scope.define("null", Symbol("null", SymbolType.VARIABLE, self.T_NONE))
+        scope.define("request", Symbol("request", SymbolType.VARIABLE, self.T_UNKNOWN))
+        scope.define("document", Symbol("document", SymbolType.VARIABLE, self.T_UNKNOWN))
+        scope.define("window", Symbol("window", SymbolType.VARIABLE, self.T_UNKNOWN))
+        scope.define("JSON", Symbol("JSON", SymbolType.VARIABLE, self.T_UNKNOWN))
+        scope.define(
+            "fetch", Symbol("fetch", SymbolType.FUNCTION, self.T_UNKNOWN, {"min_args": 0, "max_args": None})
+        )
+        return scope
 
-        self.global_scope.define("null", Symbol("null", SymbolType.VARIABLE, self.T_NONE))
-        self.global_scope.define("request", Symbol("request", SymbolType.VARIABLE, self.T_UNKNOWN))
-        self.global_scope.define("document", Symbol("document", SymbolType.VARIABLE, self.T_UNKNOWN))
-        self.global_scope.define("window", Symbol("window", SymbolType.VARIABLE, self.T_UNKNOWN))
-        self.global_scope.define("JSON", Symbol("JSON", SymbolType.VARIABLE, self.T_UNKNOWN))
-        self.global_scope.define("fetch", Symbol("fetch", SymbolType.FUNCTION, self.T_UNKNOWN, {"arg_count": -1}))
-
-    def analyze(self, ast: List[Node]):
-        for stmt in ast:
-            if isinstance(stmt, FunctionDef):
-                self.global_scope.define(
-                    stmt.name,
-                    Symbol(stmt.name, SymbolType.FUNCTION, self.T_UNKNOWN, {"arg_count": len(stmt.args)}, is_global=True),
-                )
-            elif isinstance(stmt, ClassDef):
-                self.classes[stmt.name] = stmt
-                self.global_scope.define(
-                    stmt.name,
-                    Symbol(
+    def analyze(self, all_asts: Dict[str, List[Node]]):
+        for path, ast in all_asts.items():
+            mod_name = os.path.splitext(os.path.basename(path))[0]
+            self.path_map[mod_name] = path
+            self.module_scopes[path] = self._create_global_scope()
+            self.classes[path] = {}
+            for stmt in ast:
+                if isinstance(stmt, FunctionDef):
+                    min_args = len([a for a in stmt.args if a[1] is None])
+                    max_args = len(stmt.args)
+                    self.module_scopes[path].define(
                         stmt.name,
-                        SymbolType.CLASS,
-                        Type(TypeKind.OBJECT, stmt.name),
-                        {"arg_count": len(stmt.properties)},
-                        is_global=True,
-                    ),
-                )
+                        Symbol(
+                            stmt.name,
+                            SymbolType.FUNCTION,
+                            self.T_UNKNOWN,
+                            {"min_args": min_args, "max_args": max_args},
+                            is_global=True,
+                        ),
+                    )
+                elif isinstance(stmt, ClassDef):
+                    self.classes[path][stmt.name] = stmt
+                    min_args = len([p for p in stmt.properties if p[1] is None])
+                    max_args = len(stmt.properties)
+                    self.module_scopes[path].define(
+                        stmt.name,
+                        Symbol(
+                            stmt.name,
+                            SymbolType.CLASS,
+                            Type(TypeKind.OBJECT, stmt.name),
+                            {"min_args": min_args, "max_args": max_args},
+                            is_global=True,
+                        ),
+                    )
 
-        for stmt in ast:
-            self.visit(stmt)
+        for path, ast in all_asts.items():
+            self.current_mod_path = path
+            self.current_scope = self.module_scopes[path]
+            for stmt in ast:
+                self.visit(stmt)
 
     def generic_visit(self, node: Node) -> Type:
         super().generic_visit(node)
@@ -224,11 +164,6 @@ class SemanticAnalyzer(BaseVisitor):
 
     def visit_VarAccess(self, node: VarAccess) -> Type:
         sym = self.current_scope.resolve(node.name)
-        if not sym:
-            for name in self.global_scope.symbols:
-                if name.endswith("_" + node.name):
-                    sym = self.global_scope.symbols[name]
-                    break
         if not sym:
             raise CompileError(f"Undeclared variable '{node.name}'", node.line)
         node.symbol_ref = sym
@@ -295,6 +230,20 @@ class SemanticAnalyzer(BaseVisitor):
         self.context_stack.pop()
         return self.T_NONE
 
+    def visit_PythonImport(self, node: PythonImport) -> Type:
+        name = node.alias if node.alias else node.module_name
+        if node.module_name.startswith(".") and node.alias is None:
+            raw_name = node.module_name.lstrip(".")
+            target_path = self.path_map.get(raw_name)
+            if target_path and target_path in self.module_scopes:
+                target_scope = self.module_scopes[target_path]
+                for sym_name, sym in target_scope.symbols.items():
+                    if sym_name not in BUILTINS:
+                        self.current_scope.define(sym_name, sym)
+                return self.T_NONE
+        self.current_scope.define(name, Symbol(name, SymbolType.VARIABLE, self.T_UNKNOWN))
+        return self.T_NONE
+
     def visit_ForIn(self, node: ForIn) -> Type:
         self.visit(node.iterable)
         self.context_stack.append("LOOP")
@@ -331,22 +280,23 @@ class SemanticAnalyzer(BaseVisitor):
     def visit_Instantiation(self, node: Instantiation) -> Type:
         sym = self.current_scope.resolve(node.class_name)
         if not sym:
-            for name in self.global_scope.symbols:
-                if name.endswith("_" + node.class_name):
-                    sym = self.global_scope.symbols[name]
-                    break
-        if not sym:
             raise CompileError(f"Undeclared class '{node.class_name}'", node.line)
+        min_args = sym.metadata.get("min_args")
+        max_args = sym.metadata.get("max_args")
+        if min_args is not None:
+            if len(node.args) < min_args:
+                raise CompileError(f"'{node.class_name}' expects at least {min_args} args, got {len(node.args)}", node.line)
+            if max_args is not None and len(node.args) > max_args:
+                raise CompileError(f"'{node.class_name}' expects at most {max_args} args, got {len(node.args)}", node.line)
         for a in node.args:
             self.visit(a)
-
         target_type = Type(TypeKind.OBJECT, node.class_name)
         if node.var_name:
             existing = self.current_scope.resolve(node.var_name)
             if existing and existing.is_global:
                 node.symbol_ref = existing
             else:
-                is_glob = self.current_scope == self.global_scope
+                is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
                 sym_inst = Symbol(node.var_name, SymbolType.VARIABLE, target_type, is_global=is_glob)
                 self.current_scope.define(node.var_name, sym_inst)
                 node.symbol_ref = sym_inst
@@ -358,57 +308,50 @@ class SemanticAnalyzer(BaseVisitor):
             if lt.kind not in (TypeKind.OBJECT, TypeKind.UNKNOWN):
                 raise CompileError("Cannot access member on non-object type", node.line)
             if lt.kind == TypeKind.OBJECT and lt.class_name:
-                cls = self.classes.get(lt.class_name)
-                if cls:
+                cls_def = self.classes[self.current_mod_path].get(lt.class_name)
+                if not cls_def:
+                    for mod_classes in self.classes.values():
+                        if lt.class_name in mod_classes:
+                            cls_def = mod_classes[lt.class_name]
+                            break
+                if cls_def:
                     m_name = node.right.name if isinstance(node.right, (VarAccess, Call)) else None
                     if m_name:
-                        if not any(p[0] == m_name for p in cls.properties) and not any(m.name == m_name for m in cls.methods):
+                        if not any(p[0] == m_name for p in cls_def.properties) and not any(m.name == m_name for m in cls_def.methods):
                             raise CompileError(f"Type '{lt.class_name}' has no member '{m_name}'", node.line)
             return self.T_UNKNOWN
-
         rt = self.visit(node.right)
         if node.op in ("+", "-", "*", "/"):
-            if lt.kind not in (TypeKind.INT, TypeKind.FLOAT, TypeKind.UNKNOWN) or rt.kind not in (
-                TypeKind.INT,
-                TypeKind.FLOAT,
-                TypeKind.UNKNOWN,
-            ):
+            if lt.kind not in (TypeKind.INT, TypeKind.FLOAT, TypeKind.UNKNOWN) or rt.kind not in (TypeKind.INT, TypeKind.FLOAT, TypeKind.UNKNOWN):
                 if node.op == "+" and (lt.kind == TypeKind.STR or rt.kind == TypeKind.STR):
                     return self.T_STR
                 raise CompileError(f"Invalid types for operator '{node.op}'", node.line)
         return self.T_UNKNOWN
 
-    def visit_Call(self, node: Call) -> Type:
-        sym = self.current_scope.resolve(node.name)
-        if not sym:
-            for name in self.global_scope.symbols:
-                if name.endswith("_" + node.name):
-                    sym = self.global_scope.symbols[name]
-                    break
-
-        if not sym:
-            raise CompileError(f"Undeclared function '{node.name}'", node.line)
-        arg_count = sym.metadata.get("arg_count")
-        if arg_count is not None and arg_count != -1 and sym.symbol_type != SymbolType.CLASS:
-            if len(node.args) != arg_count:
-                raise CompileError(f"'{node.name}' expects {arg_count} args, got {len(node.args)}", node.line)
-        for a in node.args:
-            self.visit(a)
+    def visit_Assign(self, node: Assign) -> Type:
+        vt = self.visit(node.value)
+        
+        # 1. Check if it resolves to an existing symbol (global or property)
+        existing = self.current_scope.resolve(node.name)
+        if existing and (existing.is_global or getattr(existing, "is_property", False)):
+            node.symbol_ref = existing
+            return vt
+        
+        # 2. Otherwise, define a new symbol in current scope
+        is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
+        sym = Symbol(node.name, SymbolType.VARIABLE, vt, is_global=is_glob)
+        self.current_scope.define(node.name, sym)
         node.symbol_ref = sym
-        return sym.type_info
-
-    def visit_PythonImport(self, node: PythonImport) -> Type:
-        name = node.alias or node.module_name
-        self.current_scope.define(name, Symbol(name, SymbolType.VARIABLE, self.T_UNKNOWN))
-        return self.T_NONE
+        return vt
 
     def visit_TypedAssign(self, node: TypedAssign) -> Type:
         vt = self.visit(node.value)
         existing = self.current_scope.resolve(node.name)
-        if existing and existing.is_global:
+        if existing and (existing.is_global or getattr(existing, "is_property", False)):
             node.symbol_ref = existing
             return vt
-        is_glob = self.current_scope == self.global_scope
+            
+        is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
         sym = Symbol(node.name, SymbolType.VARIABLE, vt, is_global=is_glob)
         self.current_scope.define(node.name, sym)
         node.symbol_ref = sym
@@ -417,25 +360,37 @@ class SemanticAnalyzer(BaseVisitor):
     def visit_ConstAssign(self, node: ConstAssign) -> Type:
         vt = self.visit(node.value)
         existing = self.current_scope.resolve(node.name)
-        if existing and existing.is_global:
+        if existing and (existing.is_global or getattr(existing, "is_property", False)):
             node.symbol_ref = existing
             return vt
-        is_glob = self.current_scope == self.global_scope
-        sym = Symbol(node.name, SymbolType.CONSTANT, vt, is_global=is_glob)
-        self.current_scope.define(node.name, sym)
-        node.symbol_ref = sym
-        return vt
-
-    def visit_Assign(self, node: Assign) -> Type:
-        vt = self.visit(node.value)
-
-        existing = self.current_scope.resolve(node.name)
-        if existing and (existing.is_global or existing.is_property):
-            node.symbol_ref = existing
-            return vt
-
-        is_glob = self.current_scope == self.global_scope
+            
+        is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
         sym = Symbol(node.name, SymbolType.VARIABLE, vt, is_global=is_glob)
         self.current_scope.define(node.name, sym)
         node.symbol_ref = sym
         return vt
+
+    def visit_If(self, node: If) -> Type:
+        self.visit(node.condition)
+        for stmt in node.body:
+            self.visit(stmt)
+        if node.else_body:
+            for stmt in node.else_body:
+                self.visit(stmt)
+        return self.T_NONE
+
+    def visit_Call(self, node: Call) -> Type:
+        sym = self.current_scope.resolve(node.name)
+        if not sym:
+            raise CompileError(f"Undeclared function '{node.name}'", node.line)
+        min_args = sym.metadata.get("min_args")
+        max_args = sym.metadata.get("max_args")
+        if min_args is not None and sym.symbol_type != SymbolType.CLASS:
+            if len(node.args) < min_args:
+                raise CompileError(f"'{node.name}' expects at least {min_args} args, got {len(node.args)}", node.line)
+            if max_args is not None and len(node.args) > max_args:
+                raise CompileError(f"'{node.name}' expects at most {max_args} args, got {len(node.args)}", node.line)
+        for a in node.args:
+            self.visit(a)
+        node.symbol_ref = sym
+        return sym.type_info
