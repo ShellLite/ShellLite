@@ -1,17 +1,15 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 
 @dataclass
 class Node:
-    """
-    Base class for all AST nodes.
-    """
-
     line: int = field(default=0, init=False)
     col: int = field(default=0, init=False)
     end_line: int = field(default=0, init=False)
     end_col: int = field(default=0, init=False)
+    type_info: Any = field(default=None, init=False)
+    symbol_ref: Any = field(default=None, init=False)
 
 
 @dataclass
@@ -324,6 +322,11 @@ class FileWrite(Node):
 
 @dataclass
 class FileRead(Node):
+    path: Node
+
+
+@dataclass
+class FileExists(Node):
     path: Node
 
 

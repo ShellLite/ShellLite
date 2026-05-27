@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 import traceback
-from typing import Optional
+from typing import Dict, List, Optional
 
 from .ast_nodes import (
     Assign,
@@ -24,6 +24,7 @@ from .interpreter import (
 )
 from .lexer import Lexer
 from .parser import Parser
+from .runtime_policy import reset_policy_cache
 
 
 def execute_source(source: str, interpreter: Interpreter):
@@ -445,80 +446,104 @@ def install_package(package_name: str, branch: str = "main", _visited=None):
         print(f"Extraction failed for {package_name}: {e}")
 
 
-def compile_file(filename: str, target: str = "llvm"):
-    """Compile a .shl file to the specified target language."""
+def compile_file(filename: str, target: str = "python"):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
-    print(f"Compiling {filename} to {target.upper()}...")
-    with open(filename, "r", encoding="utf-8") as f:
-        source = f.read()
-    try:
-        lexer = Lexer(source)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        statements = parser.parse()
 
-        # Enforce Safe Mode for compilation
-        from .compiler_utils import ensure_safe
+    if target.lower() == "llvm":
+        try:
+            from .llvm_backend.builder import build_llvm  # type: ignore[import-untyped, import-not-found]
+
+            build_llvm(filename)
+            return
+        except ImportError:
+            print("Error: 'llvmlite' is required for LLVM compilation.")
+            return
+
+    print(f"Compiling {filename}...")
+
+    try:
+        from .compiler.ast_compiler import ASTCompiler
+        from .compiler.linker import StaticLinker
+        from .compiler.optimizer import Optimizer
+        from .compiler.semantic_analyzer import SemanticAnalyzer
+
+        stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
+        linker = StaticLinker(search_paths=[os.getcwd(), stdlib_path, os.path.dirname(__file__)])
+
+        with open(filename, "r", encoding="utf-8") as f:
+            source = f.read()
+
+        lexer = Lexer(source)
+        parser = Parser(lexer.tokenize())
+        initial_ast = parser.parse()
+
+        print("[1/5] Linking dependencies...")
+        module_map = linker.link(initial_ast, os.path.abspath(filename))
+
+        print("[2/5] Performing semantic analysis...")
+        analyzer = SemanticAnalyzer()
+        analyzer.analyze(module_map)
+
+        print("[3/5] Optimizing AST...")
+        optimizer = Optimizer()
+        res_opt = optimizer.optimize(module_map)
+        if not isinstance(res_opt, dict):
+            raise RuntimeError("Optimizer returned unexpected type")
+        optimized_modules: Dict[str, List[Node]] = res_opt
+
+        print("[4/5] Generating native package...")
+        compiler = ASTCompiler()
+
+        # Determine output directory
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        out_dir = os.path.join(os.getcwd(), f"{base_name}_build")
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
+        os.makedirs(out_dir)
+
+        # Copy runtime library
+        runtime_src = os.path.join(os.path.dirname(__file__), "compiler", "runtime_lib.py")
+        runtime_dest = os.path.join(out_dir, "__shl_runtime__.py")
+        shutil.copy(runtime_src, runtime_dest)
+
+        # Create __init__.py
+        with open(os.path.join(out_dir, "__init__.py"), "w") as f:
+            f.write("")
+
+        # Compile each module
+        for path, ast_nodes in optimized_modules.items():
+            python_code = compiler.compile(ast_nodes)
+            mod_name = os.path.splitext(os.path.basename(path))[0]
+            with open(os.path.join(out_dir, f"{mod_name}.py"), "w", encoding="utf-8") as f:
+                f.write(python_code)
+
+        main_py = os.path.join(out_dir, f"{base_name}.py")
 
         try:
-            ensure_safe(statements)
-        except PermissionError as e:
-            print(f"Compilation Error: {e}")
-            return
+            import PyInstaller.__main__  # type: ignore[import]
 
-        if target.lower() == "js":
-            print("Notice: The JS target is being rebuilt for v0.6.2.1 and is temporarily unavailable.")
-            return
-        elif target.lower() == "llvm":
-            try:
-                from .llvm_backend.builder import build_llvm
+            print("[5/5] Building standalone executable with PyInstaller...")
 
-                build_llvm(filename)
-                return
-            except ImportError:
-                print("Error: 'llvmlite' is required for LLVM compilation.")
-                return
-        elif target.lower() == "wasm":
-            print("Notice: The WASM target is being rebuilt for v0.6.2.1 and is temporarily unavailable.")
-            return
-        elif target.lower() == "c":
-            print("Notice: The C target is being rebuilt for v0.6.2.1 and is temporarily unavailable.")
-            return
-        else:
-            from .compiler import Compiler
+            PyInstaller.__main__.run(
+                [main_py, "--onefile", "--clean", "--name", base_name, "--log-level", "WARN", f"--paths={out_dir}"]
+            )
 
-            compiler = Compiler()
-            code = compiler.compile(statements)
-            ext = ".py"
-        output_file = filename.replace(".shl", ext)
-        if output_file == filename:
-            output_file += ext
-        with open(output_file, "w") as f:
-            f.write(code)
-        print(f"[SUCCESS] Transpiled to {output_file}")
-        if target.lower() == "python":
-            try:
-                import PyInstaller.__main__  # type: ignore
+            exe_name = base_name
+            if sys.platform == "win32":
+                exe_name += ".exe"
 
-                print("Building Executable with PyInstaller...")
-                PyInstaller.__main__.run(
-                    [
-                        output_file,
-                        "--onefile",
-                        "--name",
-                        os.path.splitext(os.path.basename(filename))[0],
-                        "--log-level",
-                        "WARN",
-                    ]
-                )
-                exe_name = os.path.splitext(os.path.basename(filename))[0]
-                print(f"[SUCCESS] Built {exe_name}.exe")
-            except ImportError:
-                pass
+            print(f"\n[SUCCESS] Built standalone binary: dist/{exe_name}")
+
+        except ImportError:
+            print("\n[NOTICE] PyInstaller not found. To build standalone binaries, run: pip install pyinstaller")
+            print(f"[SUCCESS] Modular package available at: {out_dir}")
+
     except Exception as e:
-        print(f"Compilation Failed: {e}")
+        print(f"\n[COMPILATION FAILED] {e}")
+        if os.environ.get("SHL_DEBUG"):
+            traceback.print_exc()
 
 
 def lint_file(filename: str):
@@ -632,27 +657,17 @@ def self_install_check():
 def show_help():
     """Display the CLI help message."""
     print("""
-ShellLite - The English Like Programming Language
+ShellLite - The Natural Language Programming System
 Usage:
-  shl <filename.shl>    Run a ShellLite script
+  shl <filename.shl>    Run a ShellLite script (Interpreter)
   shl                   Start the interactive REPL
   shl help              Show this help message
+  shl compile <file>    Compile script to standalone binary (AOT)
   shl test [dir]        Run .shl test files
-  shl compile <file>    Compile a script (Options: --target js|python|c|wasm, --safe)
   shl fmt <file>        Format a script
   shl check <file>      Lint a file (JSON output)
-  shl lsp               Start the Language Server (LSP) over stdio
-  shl resolve <file> <line> <col>  Resolve symbol (JSON output)
   shl install           Install ShellLite globally to your system PATH
-  shl search [query]    Search for packages in 'The Universe'
-  shl list              List installed packages
   shl --safe            Run in Safe Mode (restricts FS/DB/System)
-
-Optional static typing:
-  x as int = 5          Declare a typed variable
-  x as str = "hello"
-  to add a as int b as int
-    give a + b
 
 For documentation, visit: https://github.com/ShellLite/ShellLite
 """)
@@ -661,9 +676,33 @@ For documentation, visit: https://github.com/ShellLite/ShellLite
 def main():
     """CLI entry point: parse command-line arguments and route to appropriate functions."""
     if len(sys.argv) > 1:
-        cmd = sys.argv[1]
-        safe_mode = "--safe" in sys.argv
+        # Improved argument parsing: find the command if it's not the first argument
+        commands = {
+            "compile",
+            "build",
+            "run",
+            "fmt",
+            "format",
+            "check",
+            "test",
+            "resolve",
+            "help",
+            "--help",
+            "-h",
+            "get",
+            "search",
+            "list",
+            "info",
+            "init",
+            "install",
+            "setup-path",
+            "--version",
+            "-v",
+        }
 
+        cmd = None
+        args = []
+        safe_mode = "--safe" in sys.argv
         output_format = None
 
         if "--fmt" in sys.argv:
@@ -684,35 +723,48 @@ def main():
 
         if safe_mode:
             os.environ["SHL_SAFE"] = "1"
-            sys.argv.remove("--safe")
+            reset_policy_cache()
+
+        for i in range(1, len(sys.argv)):
+            arg = sys.argv[i]
+            if arg == "--safe" or arg == "--fmt" or arg == "--output-format":
+                continue
+            if output_format and arg == output_format:
+                continue
+            
+            if arg in commands and cmd is None:
+                cmd = arg
+            else:
+                args.append(arg)
+
+        if cmd is None:
+            # Default to 'run' if first arg exists and is a file
+            if args and os.path.exists(args[0]):
+                cmd = "run"
+            else:
+                cmd = "help"
 
         if cmd == "compile" or cmd == "build":
-            if len(sys.argv) > 2:
-                filename = sys.argv[2]
-                target = "llvm"
+            if args:
+                filename = args[0]
+                target = "python"
                 if "--target" in sys.argv:
                     try:
                         idx = sys.argv.index("--target")
                         target = sys.argv[idx + 1]
-                    except IndexError:
-                        msg = "Error: --target requires an argument (js/python/llvm)"
-                        print(msg)
-                        return
-                compile_file(filename, target)
-            else:
-                print("Usage: shl compile <filename> [--target js]")
-        elif cmd == "llvm":
-            if len(sys.argv) > 2:
-                import importlib.util
-
-                if importlib.util.find_spec("llvmlite") is None:
-                    print("Error: 'llvmlite' is required for LLVM backend. Run: pip install llvmlite")
+                    except (IndexError, ValueError):
+                        pass
+                if os.path.isdir(filename):
+                    # Compile all .shl files in the directory
+                    for root, _, files in os.walk(filename):
+                        for f in files:
+                            if f.endswith(".shl"):
+                                compile_file(os.path.join(root, f), target)
                 else:
-                    from .llvm_backend.builder import build_llvm
-
-                    build_llvm(sys.argv[2])
+                    compile_file(filename, target)
             else:
-                print("Usage: shl llvm <filename>")
+                print("Usage: shl compile <filename> [--target python]")
+
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "--version" or cmd == "-v":
@@ -761,10 +813,6 @@ def main():
                 target_dir = sys.argv[2]
             runner = TestRunner(target_dir)
             runner.discover_and_run()
-        elif cmd == "lsp":
-            from .lsp_server import run_lsp
-
-            run_lsp()
         elif cmd == "resolve":
             if len(sys.argv) > 4:
                 filename = sys.argv[2]

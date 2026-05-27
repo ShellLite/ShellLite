@@ -99,6 +99,7 @@ class Lexer:
         "always": "ALWAYS",
         "finally": "ALWAYS",
         "error": "ERROR",
+        "throw": "ERROR",
         "use": "USE",
         "as": "AS",
         "share": "SHARE",
@@ -139,6 +140,14 @@ class Lexer:
         "http": "HTTP",
         "listen": "LISTEN",
         "port": "PORT",
+        "model": "MODEL",
+        "create": "CREATE",
+        "table": "TABLE",
+        "insert": "INSERT",
+        "find": "FIND",
+        "update": "UPDATE",
+        "delete": "DELETE",
+        "where": "WHERE",
         "every": "EVERY",
         "minute": "MINUTE",
         "minutes": "MINUTE",
@@ -302,6 +311,8 @@ class Lexer:
         self.line_number: int = 1
         self.indent_stack: List[int] = [0]
         self.bracket_depth: int = 0
+        self.paren_depth: int = 0
+        self.sq_bracket_depth: int = 0
 
     def tokenize_line_only(self) -> List[Token]:
         """Tokenize a single line without handling INDENT/DEDENT/NEWLINE."""
@@ -350,8 +361,9 @@ class Lexer:
 
             self.tokenize_line(line, indent_level)
 
-            # Newlines are only meaningful outside brackets
-            if self.bracket_depth == 0:
+            # Newlines are only meaningful outside parentheses and square brackets.
+            # We allow newlines inside braces to support brace-based blocks in topology_scan.
+            if self.paren_depth == 0 and self.sq_bracket_depth == 0:
                 self.tokens.append(Token("NEWLINE", "", self.line_number, len(line) + 1))
 
         # Emit any remaining dedents at the end of the file
@@ -414,10 +426,24 @@ class Lexer:
                     self.tokens.append(Token(token_type, value, self.line_number, col))
 
                     # Track bracket depth for indentation management
-                    if token_type in ("LPAREN", "LBRACKET", "LBRACE"):
+                    if token_type == "LPAREN":
+                        self.paren_depth += 1
                         self.bracket_depth += 1
-                    elif token_type in ("RPAREN", "RBRACKET", "RBRACE"):
+                    elif token_type == "RPAREN":
+                        self.paren_depth = max(0, self.paren_depth - 1)
                         self.bracket_depth = max(0, self.bracket_depth - 1)
+                    elif token_type == "LBRACKET":
+                        self.sq_bracket_depth += 1
+                        self.bracket_depth += 1
+                    elif token_type == "RBRACKET":
+                        self.sq_bracket_depth = max(0, self.sq_bracket_depth - 1)
+                        self.bracket_depth = max(0, self.bracket_depth - 1)
+                    elif token_type == "LBRACE":
+                        # We don't increment bracket_depth for braces to allow NEWLINEs
+                        pass
+                    elif token_type == "RBRACE":
+                        # We don't decrement bracket_depth for braces to allow NEWLINEs
+                        pass
 
                     pos += len(match.group(0))
                     matched = True
