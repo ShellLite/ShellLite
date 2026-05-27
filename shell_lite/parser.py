@@ -186,26 +186,75 @@ class Parser:
         current_node: Optional[GeoNode] = None
         last_line_node: Optional[GeoNode] = None
         block_stack: List[GeoNode] = []
+        source_stack: List[str] = []  # 'I' for INDENT, 'B' for LBRACE
+
         for token in self.tokens:
             if token.type == "EOF":
                 break
-            if token.type == "INDENT" or token.type == "LBRACE":
+
+            if token.type == "INDENT":
                 p_push = current_node if current_node else last_line_node
                 if p_push:
                     block_stack.append(p_push)
+                    source_stack.append("I")
                 current_node = None
                 continue
-            if token.type == "DEDENT" or token.type == "RBRACE":
-                if block_stack:
-                    block_stack.pop()
+
+            if token.type == "DEDENT":
+                if source_stack and source_stack[-1] == "I":
+                    source_stack.pop()
+                    if block_stack:
+                        block_stack.pop()
                 continue
+
+            if token.type == "LBRACE":
+                if current_node is None:
+                    current_node = GeoNode(
+                        line=token.line, indent_level=len(block_stack), head_token=token, tokens=[token]
+                    )
+                    if block_stack:
+                        parent = block_stack[-1]
+                        parent.children.append(current_node)
+                        current_node.parent = parent
+                    else:
+                        self.root_nodes.append(current_node)
+                else:
+                    current_node.tokens.append(token)
+
+                block_stack.append(current_node)
+                source_stack.append("B")
+                current_node = None
+                continue
+
+            if token.type == "RBRACE":
+                if current_node is None:
+                    current_node = GeoNode(
+                        line=token.line, indent_level=len(block_stack), head_token=token, tokens=[token]
+                    )
+                    if block_stack:
+                        parent = block_stack[-1]
+                        parent.children.append(current_node)
+                        current_node.parent = parent
+                    else:
+                        self.root_nodes.append(current_node)
+                else:
+                    current_node.tokens.append(token)
+
+                if source_stack and source_stack[-1] == "B":
+                    source_stack.pop()
+                    if block_stack:
+                        block_stack.pop()
+                current_node = None
+                continue
+
             if token.type == "NEWLINE":
                 last_line_node = current_node
                 current_node = None
                 continue
+
             if current_node is None:
                 current_node = GeoNode(
-                    line=token.line, indent_level=len(block_stack), raw_text="", head_token=token, tokens=[token]
+                    line=token.line, indent_level=len(block_stack), head_token=token, tokens=[token]
                 )
                 if block_stack:
                     parent = block_stack[-1]
