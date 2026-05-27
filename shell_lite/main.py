@@ -702,8 +702,36 @@ def main():
 
         cmd = None
         args = []
+        safe_mode = "--safe" in sys.argv
+        output_format = None
+
+        if "--fmt" in sys.argv:
+            try:
+                idx = sys.argv.index("--fmt")
+                output_format = sys.argv[idx + 1]
+            except IndexError:
+                print("Error: --fmt requires json or csv")
+                return
+
+        elif "--output-format" in sys.argv:
+            try:
+                idx = sys.argv.index("--output-format")
+                output_format = sys.argv[idx + 1]
+            except IndexError:
+                print("Error: --output-format requires json or csv")
+                return
+
+        if safe_mode:
+            os.environ["SHL_SAFE"] = "1"
+            reset_policy_cache()
+
         for i in range(1, len(sys.argv)):
             arg = sys.argv[i]
+            if arg == "--safe" or arg == "--fmt" or arg == "--output-format":
+                continue
+            if output_format and arg == output_format:
+                continue
+            
             if arg in commands and cmd is None:
                 cmd = arg
             else:
