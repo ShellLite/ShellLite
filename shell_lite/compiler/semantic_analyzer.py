@@ -1,6 +1,6 @@
 import os
 from enum import Enum, auto
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from ..ast_nodes import (
     Assign,
@@ -12,12 +12,13 @@ from ..ast_nodes import (
     Dictionary,
     ForIn,
     FunctionDef,
+    If,
     IndexAccess,
     Instantiation,
     ListVal,
-    ModelDef,
     Node,
     Number,
+    PythonImport,
     Return,
     Skip,
     Stop,
@@ -28,13 +29,10 @@ from ..ast_nodes import (
     UnaryOp,
     VarAccess,
     While,
-    PythonImport,
-    FromImport,
-    If,
 )
 from .base_visitor import BaseTransformer
-from .symbol_table import Symbol, SymbolTable, SymbolType
 from .builtins import BUILTINS
+from .symbol_table import Symbol, SymbolTable, SymbolType
 
 
 class TypeKind(Enum):
@@ -96,9 +94,7 @@ class SemanticAnalyzer(BaseTransformer):
         scope.define("document", Symbol("document", SymbolType.VARIABLE, self.T_UNKNOWN))
         scope.define("window", Symbol("window", SymbolType.VARIABLE, self.T_UNKNOWN))
         scope.define("JSON", Symbol("JSON", SymbolType.VARIABLE, self.T_UNKNOWN))
-        scope.define(
-            "fetch", Symbol("fetch", SymbolType.FUNCTION, self.T_UNKNOWN, {"min_args": 0, "max_args": None})
-        )
+        scope.define("fetch", Symbol("fetch", SymbolType.FUNCTION, self.T_UNKNOWN, {"min_args": 0, "max_args": None}))
         return scope
 
     def analyze(self, all_asts: Dict[str, List[Node]]):
@@ -317,12 +313,18 @@ class SemanticAnalyzer(BaseTransformer):
                 if cls_def:
                     m_name = node.right.name if isinstance(node.right, (VarAccess, Call)) else None
                     if m_name:
-                        if not any(p[0] == m_name for p in cls_def.properties) and not any(m.name == m_name for m in cls_def.methods):
+                        if not any(p[0] == m_name for p in cls_def.properties) and not any(
+                            m.name == m_name for m in cls_def.methods
+                        ):
                             raise CompileError(f"Type '{lt.class_name}' has no member '{m_name}'", node.line)
             return self.T_UNKNOWN
         rt = self.visit(node.right)
         if node.op in ("+", "-", "*", "/"):
-            if lt.kind not in (TypeKind.INT, TypeKind.FLOAT, TypeKind.UNKNOWN) or rt.kind not in (TypeKind.INT, TypeKind.FLOAT, TypeKind.UNKNOWN):
+            if lt.kind not in (TypeKind.INT, TypeKind.FLOAT, TypeKind.UNKNOWN) or rt.kind not in (
+                TypeKind.INT,
+                TypeKind.FLOAT,
+                TypeKind.UNKNOWN,
+            ):
                 if node.op == "+" and (lt.kind == TypeKind.STR or rt.kind == TypeKind.STR):
                     return self.T_STR
                 raise CompileError(f"Invalid types for operator '{node.op}'", node.line)
@@ -330,13 +332,13 @@ class SemanticAnalyzer(BaseTransformer):
 
     def visit_Assign(self, node: Assign) -> Type:
         vt = self.visit(node.value)
-        
+
         # 1. Check if it resolves to an existing symbol (global or property)
         existing = self.current_scope.resolve(node.name)
         if existing and (existing.is_global or getattr(existing, "is_property", False)):
             node.symbol_ref = existing
             return vt
-        
+
         # 2. Otherwise, define a new symbol in current scope
         is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
         sym = Symbol(node.name, SymbolType.VARIABLE, vt, is_global=is_glob)
@@ -350,7 +352,7 @@ class SemanticAnalyzer(BaseTransformer):
         if existing and (existing.is_global or getattr(existing, "is_property", False)):
             node.symbol_ref = existing
             return vt
-            
+
         is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
         sym = Symbol(node.name, SymbolType.VARIABLE, vt, is_global=is_glob)
         self.current_scope.define(node.name, sym)
@@ -363,7 +365,7 @@ class SemanticAnalyzer(BaseTransformer):
         if existing and (existing.is_global or getattr(existing, "is_property", False)):
             node.symbol_ref = existing
             return vt
-            
+
         is_glob = self.current_scope == self.module_scopes[self.current_mod_path]
         sym = Symbol(node.name, SymbolType.VARIABLE, vt, is_global=is_glob)
         self.current_scope.define(node.name, sym)

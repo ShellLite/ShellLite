@@ -72,12 +72,6 @@ def json_parse(s):
 def json_stringify(obj, indent=2):
     return py_json.dumps(obj, indent=indent)
 
-    return json.loads(s)
-
-
-def json_stringify(obj, indent=2):
-    return json.dumps(obj, indent=indent)
-
 
 def pop(target, index=-1):
     return target.pop(index)
@@ -493,7 +487,7 @@ def download(u: str, p: str = None):
 
 def convert(d: Any, f: str):
     if f.lower() == "json":
-        return json.dumps(d)
+        return py_json.dumps(d)
     return str(d) if f.lower() == "str" else d
 
 
@@ -511,7 +505,7 @@ def std_net_post(url: str, data):
     timeout = float(timeout_raw) if timeout_raw else None
     payload = data
     if isinstance(data, dict):
-        payload = json.dumps(data).encode("utf-8")
+        payload = py_json.dumps(data).encode("utf-8")
     elif isinstance(data, str):
         payload = data.encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")

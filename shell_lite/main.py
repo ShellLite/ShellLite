@@ -454,6 +454,7 @@ def compile_file(filename: str, target: str = "python"):
     if target.lower() == "llvm":
         try:
             from .llvm_backend.builder import build_llvm
+
             build_llvm(filename)
             return
         except ImportError:
@@ -463,10 +464,10 @@ def compile_file(filename: str, target: str = "python"):
     print(f"Compiling {filename}...")
 
     try:
-        from .compiler.linker import StaticLinker
-        from .compiler.semantic_analyzer import SemanticAnalyzer
-        from .compiler.optimizer import Optimizer
         from .compiler.ast_compiler import ASTCompiler
+        from .compiler.linker import StaticLinker
+        from .compiler.optimizer import Optimizer
+        from .compiler.semantic_analyzer import SemanticAnalyzer
 
         stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
         linker = StaticLinker(search_paths=[os.getcwd(), stdlib_path, os.path.dirname(__file__)])
@@ -491,7 +492,7 @@ def compile_file(filename: str, target: str = "python"):
 
         print("[4/5] Generating native package...")
         compiler = ASTCompiler()
-        
+
         # Determine output directory
         base_name = os.path.splitext(os.path.basename(filename))[0]
         out_dir = os.path.join(os.getcwd(), f"{base_name}_build")
@@ -523,16 +524,7 @@ def compile_file(filename: str, target: str = "python"):
             print("[5/5] Building standalone executable with PyInstaller...")
 
             PyInstaller.__main__.run(
-                [
-                    main_py,
-                    "--onefile",
-                    "--clean",
-                    "--name",
-                    base_name,
-                    "--log-level",
-                    "WARN",
-                    f"--paths={out_dir}"
-                ]
+                [main_py, "--onefile", "--clean", "--name", base_name, "--log-level", "WARN", f"--paths={out_dir}"]
             )
 
             exe_name = base_name

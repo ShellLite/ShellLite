@@ -1421,7 +1421,70 @@ class Parser:
         if t.type == "ID":
             return True
         # Many keywords can be used as identifiers (e.g. method names or variables)
-        excluded = ("IF", "WHILE", "FOR", "LOOP", "REPEAT", "FOREVER", "USE", "DEFINE", "STRUCTURE", "TRY", "UNLESS", "UNTIL", "ON", "FUNCTION", "FN", "TO", "PRINT", "SAY", "MAKE", "CONST", "RETURN", "STOP", "SKIP", "SPAWN", "AWAIT", "TEST", "EXPECT", "ENSURE", "PARALLEL", "LOCK", "SEND", "IS", "BE", "ASSIGN", "PLUSEQ", "MINUSEQ", "MULEQ", "DIVEQ", "MODEQ", "PLUS", "MINUS", "MUL", "DIV", "MOD", "EQ", "NEQ", "LT", "GT", "LE", "GE", "AND", "OR", "NOT", "LPAREN", "RPAREN", "LBRACKET", "RBRACKET", "LBRACE", "RBRACE", "COMMA", "COLON", "DOT")
+        excluded = (
+            "IF",
+            "WHILE",
+            "FOR",
+            "LOOP",
+            "REPEAT",
+            "FOREVER",
+            "USE",
+            "DEFINE",
+            "STRUCTURE",
+            "TRY",
+            "UNLESS",
+            "UNTIL",
+            "ON",
+            "FUNCTION",
+            "FN",
+            "TO",
+            "PRINT",
+            "SAY",
+            "MAKE",
+            "CONST",
+            "RETURN",
+            "STOP",
+            "SKIP",
+            "SPAWN",
+            "AWAIT",
+            "TEST",
+            "EXPECT",
+            "ENSURE",
+            "PARALLEL",
+            "LOCK",
+            "SEND",
+            "IS",
+            "BE",
+            "ASSIGN",
+            "PLUSEQ",
+            "MINUSEQ",
+            "MULEQ",
+            "DIVEQ",
+            "MODEQ",
+            "PLUS",
+            "MINUS",
+            "MUL",
+            "DIV",
+            "MOD",
+            "EQ",
+            "NEQ",
+            "LT",
+            "GT",
+            "LE",
+            "GE",
+            "AND",
+            "OR",
+            "NOT",
+            "LPAREN",
+            "RPAREN",
+            "LBRACKET",
+            "RBRACKET",
+            "LBRACE",
+            "RBRACE",
+            "COMMA",
+            "COLON",
+            "DOT",
+        )
         return t.type not in excluded
 
     def bind_call_or_expr(self, node: GeoNode) -> Node:
@@ -1634,7 +1697,9 @@ class Parser:
                 values.append(val_node)
             elif t.type == "LBRACKET":
                 is_indexing = False
-                if i > 0 and (tokens[i - 1].type in ("ID", "RBRACKET", "RPAREN", "STRING") or self._is_ident_token(tokens[i-1])):
+                if i > 0 and (
+                    tokens[i - 1].type in ("ID", "RBRACKET", "RPAREN", "STRING") or self._is_ident_token(tokens[i - 1])
+                ):
                     is_indexing = True
 
                 if is_indexing:

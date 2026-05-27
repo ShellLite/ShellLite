@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Optional
 
-from ..ast_nodes import Node, Import, ImportAs, PythonImport
+from ..ast_nodes import Import, ImportAs, Node, PythonImport
 from ..lexer import Lexer
 from ..parser import Parser
 
