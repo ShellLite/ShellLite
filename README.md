@@ -81,7 +81,7 @@ For a deep dive into the underlying parsing theory, please refer to the papers o
 
 Detailed language guides can be found in the `docs/` directory. (TO BE RE WRITTEN)
 
-## Official Discord:- https://discord.gg/WgqrgvuGfs
+### Official Discord:- [Discord](https://discord.gg/WgqrgvuGfs)
 
 ## License
 
