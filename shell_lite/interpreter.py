@@ -533,7 +533,7 @@ class Interpreter:
             "convert": rt.convert,
             "clear_dict": lambda d: d.clear(),
         }
-        self.web_builder = []
+        self.web_builder: List[Any] = []
         for t in [
             "div",
             "p",

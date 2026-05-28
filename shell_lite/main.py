@@ -446,7 +446,12 @@ def install_package(package_name: str, branch: str = "main", _visited=None):
         print(f"Extraction failed for {package_name}: {e}")
 
 
-def compile_file(filename: str, target: str = "python", project_name: str = None, project_dir: str = None):
+def compile_file(
+    filename: str,
+    target: str = "python",
+    project_name: Optional[str] = None,
+    project_dir: Optional[str] = None,
+):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
