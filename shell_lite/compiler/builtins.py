@@ -23,7 +23,7 @@ BUILTINS: Dict[str, BuiltinMapping] = {
     # Core IO
     "print": BuiltinMapping("print", 0, None, "print"),
     "say": BuiltinMapping("say", 0, None, "print"),
-    "ask": BuiltinMapping("ask", 0, 1, "input"),
+    "ask": BuiltinMapping("ask", 0, 1, "shl_ask"),
     # Type Conversion
     "str": BuiltinMapping("str", 1, 1, "str"),
     "int": BuiltinMapping("int", 1, 1, "int"),
@@ -42,14 +42,14 @@ BUILTINS: Dict[str, BuiltinMapping] = {
     "upper": BuiltinMapping("upper", 1, 1, "str.upper"),
     "lower": BuiltinMapping("lower", 1, 1, "str.lower"),
     "sort": BuiltinMapping("sort", 1, 1, "sorted"),
-    "count": BuiltinMapping("count", 1, 2),
-    "split": BuiltinMapping("split", 1, 2),
+    "count": BuiltinMapping("count", 1, 2, "shl_count"),
+    "split": BuiltinMapping("split", 1, 2, "shl_split"),
     "add": BuiltinMapping("add", 2, 2),
     "remove": BuiltinMapping("remove", 2, 2),
     "pop": BuiltinMapping("pop", 1, 2),
-    "contains": BuiltinMapping("contains", 2, 2),
-    "empty": BuiltinMapping("empty", 1, 1),
-    "xor": BuiltinMapping("xor", 2, 2),
+    "contains": BuiltinMapping("contains", 2, 2, "shl_contains"),
+    "empty": BuiltinMapping("empty", 1, 1, "shl_empty"),
+    "xor": BuiltinMapping("xor", 2, 2, "shl_xor"),
     # JSON
     "json_parse": BuiltinMapping("json_parse", 1, 1, "py_json.loads"),
     "json_stringify": BuiltinMapping("json_stringify", 1, 2, "py_json.dumps"),

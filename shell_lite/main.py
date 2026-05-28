@@ -446,10 +446,13 @@ def install_package(package_name: str, branch: str = "main", _visited=None):
         print(f"Extraction failed for {package_name}: {e}")
 
 
-def compile_file(filename: str, target: str = "python"):
+def compile_file(filename: str, target: str = "python", project_name: str = None, project_dir: str = None):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
+
+    if project_dir is None:
+        project_dir = os.path.dirname(os.path.abspath(filename))
 
     if target.lower() == "llvm":
         try:
@@ -497,8 +500,8 @@ def compile_file(filename: str, target: str = "python"):
         compiler = ASTCompiler()
 
         # Determine output directory
-        base_name = os.path.splitext(os.path.basename(filename))[0]
-        out_dir = os.path.join(os.getcwd(), f"{base_name}_build")
+        base_name = project_name or os.path.splitext(os.path.basename(filename))[0]
+        out_dir = os.path.join(project_dir, f"{base_name}_build")
         if os.path.exists(out_dir):
             shutil.rmtree(out_dir)
         os.makedirs(out_dir)

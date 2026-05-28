@@ -343,7 +343,7 @@ class SemanticAnalyzer(BaseTransformer):
     def visit_Assign(self, node: Assign) -> Type:
         vt = self.visit(node.value)
         existing = self.current_scope.resolve(node.name)
-        if existing and existing.is_global and self.current_scope != self.global_scope:
+        if existing and (existing.is_global or existing.is_property) and self.current_scope != self.global_scope:
             node.symbol_ref = existing
             return vt
 
@@ -356,7 +356,7 @@ class SemanticAnalyzer(BaseTransformer):
     def visit_TypedAssign(self, node: TypedAssign) -> Type:
         vt = self.visit(node.value)
         existing = self.current_scope.resolve(node.name)
-        if existing and existing.is_global and self.current_scope != self.global_scope:
+        if existing and (existing.is_global or existing.is_property) and self.current_scope != self.global_scope:
             node.symbol_ref = existing
             return vt
 

@@ -122,6 +122,37 @@ def channel_receive(q):
     return q.get()
 
 
+def shl_split(s, sep=None):
+    if sep:
+        return str(s).split(str(sep))
+    return str(s).split()
+
+
+def shl_count(obj, item=None):
+    if item is not None:
+        return obj.count(item)
+    return len(obj)
+
+
+def shl_contains(obj, item):
+    return item in obj
+
+
+def shl_empty(obj):
+    return len(obj) == 0
+
+
+def shl_xor(a, b):
+    return a ^ b
+
+
+def shl_ask(prompt=""):
+    try:
+        return builtins.input(prompt)
+    except EOFError:
+        return None
+
+
 def shl_execute(cmd_str):
     require_exec(str(cmd_str))
     args = shlex.split(str(cmd_str))
