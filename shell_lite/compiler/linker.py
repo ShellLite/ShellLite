@@ -57,7 +57,24 @@ class StaticLinker:
                     continue
 
                 mod_name = os.path.splitext(os.path.basename(fp))[0]
-                current_module_ast.append(PythonImport(f".{mod_name}", alias))
+                try:
+                    rel_dir = os.path.relpath(os.path.dirname(fp), os.path.dirname(abs_p))
+                    if rel_dir == ".":
+                        dots = "."
+                        pkg_path = ""
+                    elif rel_dir.startswith(".."):
+                        parts = rel_dir.split(os.sep)
+                        dots = "." * (parts.count("..") + 1)
+                        remaining = [p for p in parts if p != ".."]
+                        pkg_path = ".".join(remaining) + "." if remaining else ""
+                    else:
+                        dots = "."
+                        pkg_path = rel_dir.replace(os.sep, ".") + "."
+                except ValueError:
+                    dots = "."
+                    pkg_path = ""
+
+                current_module_ast.append(PythonImport(f"{dots}{pkg_path}{mod_name}", alias))
 
                 if fp not in self.module_asts:
                     with open(fp, "r", encoding="utf-8") as f:

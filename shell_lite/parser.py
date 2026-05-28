@@ -373,6 +373,12 @@ class Parser:
             ast_node.end_col = last_tok.column + len(str(last_tok.value))
         return ast_node
 
+    def collect_descendant_tokens(self, nodes: List[GeoNode], out: List[Token]):
+        for child in nodes:
+            out.extend(child.tokens)
+            if child.children:
+                self.collect_descendant_tokens(child.children, out)
+
     def bind_node(self, node: GeoNode) -> Optional[Node]:
         # Find first non-noise token for dispatch
         effective_head = node.head_token
@@ -805,9 +811,7 @@ class Parser:
 
         expr_tokens = tokens[assign_idx + 1 :]
         if node.children:
-            for child in node.children:
-                expr_tokens.extend(child.tokens)
-        # print(f"DEBUG bind_assignment: expr_tokens={[t.value for t in expr_tokens]}")
+            self.collect_descendant_tokens(node.children, expr_tokens)
         value = self.parse_expr_iterative(expr_tokens, node.children)
         if value is None:
             raise SyntaxError(f"Missing value in assignment at line {node.line}")

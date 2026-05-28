@@ -439,7 +439,12 @@ def std_csv_export(data, path):
 
 
 class Interpreter:
-    def __init__(self):
+    def __init__(self, search_paths: Optional[List[str]] = None):
+        stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
+        if search_paths is not None:
+            self.search_paths = search_paths + [stdlib_path]
+        else:
+            self.search_paths = [os.getcwd(), stdlib_path]
         self.policy = get_policy()
         self.safe_mode = self.policy.safe_mode
         self._thread_local = threading.local()
@@ -528,7 +533,7 @@ class Interpreter:
             "convert": rt.convert,
             "clear_dict": lambda d: d.clear(),
         }
-        self.web_builder = []
+        self.web_builder: List[Any] = []
         for t in [
             "div",
             "p",
@@ -603,7 +608,7 @@ class Interpreter:
             path += ".shl"
 
         if search_paths is None:
-            search_paths = [os.getcwd(), os.path.join(os.path.dirname(__file__), "stdlib")]
+            search_paths = getattr(self, "search_paths", [os.getcwd(), os.path.join(os.path.dirname(__file__), "stdlib")])
 
         for p in search_paths:
             full_path = os.path.join(p, path)
@@ -613,6 +618,8 @@ class Interpreter:
         raise FileNotFoundError(f"Module {path} not found")
 
     def _load_module_nodes(self, path: str, search_paths: Optional[List[str]] = None) -> List[Node]:
+        if search_paths is None:
+            search_paths = getattr(self, "search_paths", [os.getcwd(), os.path.join(os.path.dirname(__file__), "stdlib")])
         abs_path = self._resolve_module_path(path, search_paths)
         stdlib_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "stdlib"))
         if abs_path.startswith(stdlib_root):
