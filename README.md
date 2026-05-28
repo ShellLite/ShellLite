@@ -65,14 +65,12 @@ while attempts < max_attempts
 say in red "\nGame Over! The number was " + str(secret)
 ```
 
-## Compilation (WIP)
+## Compilation
 
-ShellLite can be compiled to various targets for deployment:
+ShellLite can be compiled for deploymebt
 
 ```bash
-shl compile script.shl --target c      # Transpile to C
-shl compile script.shl --target js     # Transpile to JavaScript
-shl compile script.shl --target wasm   # Build for WebAssembly
+shl compile script.shl
 ```
 
 ## Research & Documentation
@@ -82,6 +80,8 @@ For a deep dive into the underlying parsing theory, please refer to the papers o
 - [ShellLite: White paper](https://zenodo.org/records/18228699)
 
 Detailed language guides can be found in the `docs/` directory. (TO BE RE WRITTEN)
+
+## Official Discord:- https://discord.gg/WgqrgvuGfs
 
 ## License
 
