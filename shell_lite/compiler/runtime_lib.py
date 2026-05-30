@@ -193,7 +193,7 @@ def render(obj):
 
 def __make_tag(tag_name):
     def tag_handler(*args, body=None, **kwargs):
-        attrs = "".join(f' {k.replace("_", "-")}="{v}"' for k, v in kwargs.items())
+        attrs = "".join(f' {k.rstrip("_").replace("_", "-")}="{v}"' for k, v in kwargs.items())
         __emit_html(f"<{tag_name}{attrs}>")
         for a in args:
             __emit_html(str(a))
@@ -407,9 +407,10 @@ _static_routes: Dict[str, str] = {}
 
 class ShellLiteHTTPHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        clean_path = self.path.split("?")[0].split("#")[0]
         for pfx, fld in _static_routes.items():
-            if self.path.startswith(pfx):
-                rel_path = self.path[len(pfx) :].lstrip("/")
+            if clean_path.startswith(pfx):
+                rel_path = clean_path[len(pfx) :].lstrip("/")
                 full_path = os.path.abspath(os.path.join(fld, rel_path))
                 if not full_path.startswith(os.path.abspath(fld)):
                     self.send_response(403)
@@ -426,9 +427,20 @@ class ShellLiteHTTPHandler(BaseHTTPRequestHandler):
                         self.wfile.write(f.read())
                     return
 
-        if self.path in _web_handlers:
+        # Check dynamic routes
+        handler = _web_handlers.get(self.path)
+        if not handler:
+            # Try matching parameterized routes
+            for route, h in _web_handlers.items():
+                if ":" in route:
+                    pattern = "^" + re.sub(r':[^/]+', r'([^/]+)', route) + "$"
+                    if re.match(pattern, self.path):
+                        handler = h
+                        break
+
+        if handler:
             try:
-                res = _web_handlers[self.path]()
+                res = handler()
                 self.send_response(200)
                 self.send_header("Content-type", "text/html")
                 self.end_headers()
