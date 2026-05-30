@@ -13,7 +13,7 @@ def test_imported_class_instantiation(tmp_path, capsys):
     person_shl.write_text(
         """
 class Person {
-    fn init(name) {
+    to init(name) {
         self.name = name
     }
 }
@@ -36,7 +36,7 @@ def test_imported_class_method_call(tmp_path, capsys):
     math_shl.write_text(
         """
 class Math {
-    fn add(a, b) {
+    to add(a, b) {
         return a + b
     }
 }
@@ -59,7 +59,7 @@ def test_import_as_class_instantiation(tmp_path, capsys):
     module_shl.write_text(
         """
 class C {
-    fn get() {
+    to get() {
         return "it works"
     }
 }
@@ -81,7 +81,7 @@ def test_import_as_function_call(tmp_path, capsys):
     module_shl = tmp_path / "utils.shl"
     module_shl.write_text(
         """
-fn greet(name) {
+to greet(name) {
     return "Hello, " + name
 }
 """,
@@ -102,7 +102,7 @@ def test_import_as_shared_state(tmp_path, capsys):
     module_shl.write_text(
         """
 counter = 0
-fn inc() {
+to inc() {
     counter = counter + 1
     return counter
 }

@@ -82,7 +82,7 @@ def test_compiled_namespace_import_shared_state(tmp_path, monkeypatch):
     reset_policy_cache()
     mod_path = tmp_path / "mod.shl"
     mod_path.write_text(
-        "counter = 0\nfn inc() {\n    counter = counter + 1\n    return counter\n}\n",
+        "counter = 0\nto inc() {\n    counter = counter + 1\n    return counter\n}\n",
         encoding="utf-8",
     )
     source = f'''
