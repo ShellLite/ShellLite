@@ -6,4 +6,4 @@ All notable changes to the ShellLite project will be documented in this file.
 ### Added
 - Created this CHANGELOG.md file.
 - Added automation to sync this changelog with the official website.
-- TESTING CHANGELOG SYNC
+- TESTING CHANGELOG SYNC - 1
