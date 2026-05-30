@@ -30,3 +30,7 @@ jobs:
           git add public/docs/Changelog.md
           git commit -m "Auto-update changelog from ShellLite [skip ci]" || echo "No changes to commit"
           git push https://x-access-token:${{ secrets.WEBSITE_SYNC_TOKEN }}@github.com/ShellLite/ShellLite-Website.git main
+
+      - name: Trigger VM Deploy
+        run: |
+          curl -s http://shelllite.tech/deploy-webhook-secret-99
