@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional, Union
 
 from .ast_nodes import (
+    AnonymousFunction,
     Assertion,
     Assign,
     Await,
@@ -409,7 +410,6 @@ class Parser:
             "UNTIL": self.bind_until,
             "ON": self.bind_on,
             "FUNCTION": self.bind_func,
-            "FN": self.bind_func,
             "TO": self.bind_func,
             "PRINT": self.bind_print,
             "SAY": self.bind_print,
@@ -637,7 +637,7 @@ class Parser:
                 if assign_idx != -1:
                     default_val = self.parse_expr_iterative(child.tokens[assign_idx + 1 :])
                 properties.append((prop_name, default_val))
-            elif head == "TO" or head == "FUNCTION" or head == "FN":
+            elif head == "TO" or head == "FUNCTION":
                 methods.append(self.bind_func(child))
         return ClassDef(name, properties, methods, parent)
 
@@ -1468,7 +1468,6 @@ class Parser:
             "UNTIL",
             "ON",
             "FUNCTION",
-            "FN",
             "TO",
             "PRINT",
             "SAY",
@@ -1744,16 +1743,22 @@ class Parser:
                 current_elem: List[Token] = []
                 has_comma = False
                 to_idx = -1
+                in_take = 0
                 while j < len(tokens):
                     if tokens[j].type == "LBRACKET":
                         depth += 1
                     elif tokens[j].type == "RBRACKET":
                         depth -= 1
+                    elif tokens[j].type == "TAKE":
+                        in_take += 1
+                    elif tokens[j].type == "DO":
+                        in_take = max(0, in_take - 1)
+
                     if depth == 0:
                         if current_elem:
                             elements_tokens.append(current_elem)
                         break
-                    if tokens[j].type == "COMMA" and depth == 1:
+                    if tokens[j].type == "COMMA" and depth == 1 and in_take == 0:
                         elements_tokens.append(current_elem)
                         current_elem = []
                         has_comma = True
@@ -1859,6 +1864,7 @@ class Parser:
                 depth = 1
                 bracket_depth = 0
                 paren_depth = 0
+                in_take = 0
                 j = i + 1
                 pairs_tokens: List[List[Token]] = []
                 current_pair: List[Token] = []
@@ -1875,12 +1881,16 @@ class Parser:
                         paren_depth += 1
                     elif tokens[j].type == "RPAREN":
                         paren_depth -= 1
+                    elif tokens[j].type == "TAKE":
+                        in_take += 1
+                    elif tokens[j].type == "DO":
+                        in_take = max(0, in_take - 1)
 
                     if depth == 0:
                         if current_pair:
                             pairs_tokens.append(current_pair)
                         break
-                    if tokens[j].type == "COMMA" and depth == 1 and bracket_depth == 0 and paren_depth == 0:
+                    if tokens[j].type == "COMMA" and depth == 1 and bracket_depth == 0 and paren_depth == 0 and in_take == 0:
                         pairs_tokens.append(current_pair)
                         current_pair = []
                     else:
@@ -1974,6 +1984,43 @@ class Parser:
                     raise SyntaxError(f"Missing command for 'execute' at line {t.line}")
                 values.append(Execute(res_ex))
                 break
+            elif t.type == "TAKE":
+                i += 1
+                params = []
+                while i < len(tokens) and tokens[i].type != "DO":
+                    if tokens[i].type == "ID":
+                        params.append(tokens[i].value)
+                    elif tokens[i].type == "COMMA":
+                        pass
+                    i += 1
+                if i < len(tokens) and tokens[i].type == "DO":
+                    i += 1
+                    if children:
+                        body = self.bind_statement_list(children)
+                        values.append(AnonymousFunction(params, body))
+                        break
+                    else:
+                        body_tokens = []
+                        depth = 0
+                        while i < len(tokens):
+                            tt = tokens[i]
+                            if tt.type in ("LPAREN", "LBRACKET", "LBRACE"):
+                                depth += 1
+                            elif tt.type in ("RPAREN", "RBRACKET", "RBRACE"):
+                                if depth == 0:
+                                    break
+                                depth -= 1
+                            elif tt.type == "COMMA" and depth == 0:
+                                break
+                            body_tokens.append(tt)
+                            i += 1
+                        body_node = self.parse_expr_iterative(body_tokens, children)
+                        if body_node is None:
+                            raise SyntaxError(f"Missing body for lambda at line {t.line}")
+                        values.append(AnonymousFunction(params, body_node))
+                        continue
+                else:
+                    raise SyntaxError(f"Expected 'do' after parameters in 'take' at line {t.line}")
             elif t.type in (
                 "ID",
                 "ADD",
@@ -2054,8 +2101,13 @@ class Parser:
                 j = i + 3
                 elements_tokens: List[List[Token]] = []
                 current_elem: List[Token] = []
+                in_take = 0
                 while j < len(tokens):
-                    if tokens[j].type == "COMMA":
+                    if tokens[j].type == "TAKE":
+                        in_take += 1
+                    elif tokens[j].type == "DO":
+                        in_take = max(0, in_take - 1)
+                    if tokens[j].type == "COMMA" and in_take == 0:
                         if current_elem:
                             elements_tokens.append(current_elem)
                             current_elem = []
@@ -2087,8 +2139,13 @@ class Parser:
                 j = i + 4
                 elements_tokens = []
                 current_elem = []
+                in_take = 0
                 while j < len(tokens):
-                    if tokens[j].type == "COMMA":
+                    if tokens[j].type == "TAKE":
+                        in_take += 1
+                    elif tokens[j].type == "DO":
+                        in_take = max(0, in_take - 1)
+                    if tokens[j].type == "COMMA" and in_take == 0:
                         if current_elem:
                             elements_tokens.append(current_elem)
                             current_elem = []
@@ -2341,18 +2398,23 @@ class Parser:
             if j < len(tokens) and tokens[j].type == "RPAREN":
                 return j, Call(name, [])
             else:
+                in_take = 0
                 while j < len(tokens):
                     t_type = tokens[j].type
                     if t_type in ("LPAREN", "LBRACKET", "LBRACE"):
                         depth += 1
                     elif t_type in ("RPAREN", "RBRACKET", "RBRACE"):
                         depth -= 1
+                    elif t_type == "TAKE":
+                        in_take += 1
+                    elif t_type == "DO":
+                        in_take = max(0, in_take - 1)
 
                     if depth == 0:
                         if current_elem:
                             elements_tokens.append(current_elem)
                         break
-                    if t_type == "COMMA" and depth == 1:
+                    if t_type == "COMMA" and depth == 1 and in_take == 0:
                         elements_tokens.append(current_elem)
                         current_elem = []
                     else:

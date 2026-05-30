@@ -145,6 +145,28 @@ repeat 3 times:
         interp, _, _ = self.run_code(source)
         self.assertEqual(interp.get("x"), 3)
 
+    def test_lambda_multiple_args(self):
+        code = """mul = take x, y do x * y
+result = mul(4, 5)"""
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("result"), 20)
+
+    def test_lambda_block_body(self):
+        code = """add_block = take x, y do {
+    give x + y
+}
+result = add_block(1, 2)"""
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("result"), 3)
+
+    def test_lambda_callback(self):
+        code = """to apply(a, b, cb) {
+    give cb(a, b)
+}
+result = apply(2, 3, take x, y do x + y)"""
+        env, _, _ = self.run_code(code)
+        self.assertEqual(env.get("result"), 5)
+
 
 if __name__ == "__main__":
     unittest.main()
