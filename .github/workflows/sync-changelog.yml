@@ -18,9 +18,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ShellLite/ShellLite-Website
-          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          ssh-key: ${{ secrets.SSH_DEPLOY_KEY }}
           path: website
-          persist-credentials: true
 
       - name: Update Changelog on Website
         run: |
