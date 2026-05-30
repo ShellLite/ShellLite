@@ -82,7 +82,7 @@ def run_repl():
     interpreter = Interpreter()
     print("\n" + "=" * 40)
     print("=" * 40)
-    print("Version: v0.6.3")
+    print("Version: v0.6.3.2")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run outside the REPL.")
     try:
@@ -214,7 +214,7 @@ def install_globally():
                     with open(rc, "a", encoding="utf-8") as f:
                         f.write(f"\n# Added by ShellLite Installer\n{export_line}\n")
 
-        print("\n[SUCCESS] ShellLite (v0.6.3) is installed!")
+        print("\n[SUCCESS] ShellLite (v0.6.3.2) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows.")
@@ -231,7 +231,7 @@ def search_package(query: Optional[str] = None):
     print("\n" + "=" * 50)
     print(f"  Searching for: {query if query else 'all'}")
     print("=" * 50)
-    print("Notice: The package registry is being rebuilt for v0.6.3")
+    print("Notice: The package registry is being rebuilt for v0.6.3.2")
     print("In the meantime, you can find packages at: https://github.com/topics/shell-lite")
     print("=" * 50 + "\n")
 
@@ -648,7 +648,7 @@ def format_file(filename: str):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
-    print("Notice: The formatting feature is being rebuilt for v0.6.3 and is temporarily unavailable.")
+    print("Notice: The formatting feature is being rebuilt for v0.6.3.2 and is temporarily unavailable.")
     return
 
 
@@ -776,7 +776,7 @@ def main():
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "--version" or cmd == "-v":
-            print("ShellLite v0.6.3")
+            print("ShellLite v0.6.3.2")
         elif cmd == "get":
             if len(sys.argv) > 2:
                 package_name = sys.argv[2]
