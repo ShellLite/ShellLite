@@ -242,7 +242,12 @@ class ASTCompiler(BaseVisitor):
             return ast.Compare(left=self.visit(node.args[1]), ops=[ast.In()], comparators=[self.visit(node.args[0])])
 
         args = [self.visit(a) for a in node.args]
-        keywords = [ast.keyword(arg=k, value=self.visit(v)) for k, v in (node.kwargs or [])]
+        keywords = []
+        for k, v in (node.kwargs or []):
+            arg_name = k
+            if k in ("class", "for", "def", "if", "else", "while", "return", "import", "from", "try", "except", "lambda", "with", "as", "is", "in", "and", "or", "not", "pass", "raise", "yield", "async", "await", "break", "continue"):
+                arg_name = k + "_"
+            keywords.append(ast.keyword(arg=arg_name, value=self.visit(v)))
 
         if node.body:
             body_func_name = self.get_tmp() + "_body"

@@ -277,13 +277,16 @@ def make_jit_tag_fn(name, interpreter):
                 attrs.update(arg)
             elif isinstance(arg, LambdaFunction):
                 t = JITTag(name, attrs)
-                if interpreter.web_builder:
+                is_top = not interpreter.web_builder
+                if not is_top:
                     interpreter.web_builder[-1].add(t)
                 interpreter.web_builder.append(t)
                 try:
                     arg()
                 finally:
                     interpreter.web_builder.pop()
+                if is_top:
+                    rt.__emit_html(str(t))
                 return t
             elif isinstance(arg, str) and "=" in arg and " " not in arg:
                 k, v = arg.split("=", 1)
@@ -295,6 +298,8 @@ def make_jit_tag_fn(name, interpreter):
             t.add(c)
         if interpreter.web_builder:
             interpreter.web_builder[-1].add(t)
+        else:
+            rt.__emit_html(str(t))
         return t
 
     return fn
