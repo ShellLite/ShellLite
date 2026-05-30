@@ -777,6 +777,10 @@ class Interpreter:
         self.current_env.set(node.name, lf)
         return lf
 
+    def visit_AnonymousFunction(self, node: AnonymousFunction):
+        body = node.body if isinstance(node.body, list) else [node.body]
+        return LambdaFunction(node.args, body, self)
+
     def visit_Call(self, node: Call):
         func = self.current_env.get(node.name)
         args = [self.visit(a) for a in node.args]

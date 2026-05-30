@@ -118,6 +118,12 @@ class FunctionDef(Node):
 
 
 @dataclass
+class AnonymousFunction(Node):
+    args: List[str]
+    body: Union[Node, List[Node]]
+
+
+@dataclass
 class Call(Node):
     name: str
     args: List[Node]

@@ -72,7 +72,7 @@ class Lexer:
         "can": "TO",
         "return": "RETURN",
         "give": "RETURN",
-        "fn": "FN",
+        "take": "TAKE",
         "structure": "STRUCTURE",
         "thing": "STRUCTURE",
         "class": "STRUCTURE",
