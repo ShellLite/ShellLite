@@ -15,7 +15,6 @@ The project implements **Geometric Binding Parsing (GBP)**, an algorithm that de
 *   **Natural Language Syntax:** Designed to be read like plain English or pseudocode, reducing the cognitive load for beginners.
 *   **Python Interop:** Seamlessly import and utilize any Python module via a robust proxying layer.
 *   **Cross Platform GUI:** A built in engine for creating desktop applications using an intuitive widget based syntax.
-*   **Multi Backend Compilation:** Supports execution via a tree-walking interpreter or compilation to C, JavaScript, and WebAssembly (WASM). (TO BE REWRITTEN)
 *   **Integrated Package Management:** Built in support for installing and managing dependencies directly from GitHub repositories.
 
 ## Quick Start
@@ -67,7 +66,7 @@ say in red "\nGame Over! The number was " + str(secret)
 
 ## Compilation
 
-ShellLite can be compiled for deploymebt
+ShellLite can be compiled for deployment.
 
 ```bash
 shl compile script.shl
