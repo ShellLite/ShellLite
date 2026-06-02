@@ -1,10 +1,10 @@
-cff-version: 0.6.3.2
+cff-version: 0.6.3.3
 message: "If you use this software, please cite it as below."
 authors:
 - family-names: "Naithani"
   given-names: "Shrey"
 title: "ShellLite"
-version: 0.6.3.2
+version: 0.6.3.3
 date-released: 2026-01-10
 url: "https://shelllite.tech"
 repository-code: "https://github.com/ShellLite/ShellLite"
