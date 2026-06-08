@@ -98,9 +98,9 @@ multi-line comment
             lexer.tokenize()
 
     def test_bad_unindent_raises_indentation_error(self):
-        code = textwrap.dedent('''\
+        code = ('''\
         if x > 1
-            say "yes"
+             say "yes"
           say "bad"
          ''')
         lexer = Lexer(code)
