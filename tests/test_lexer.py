@@ -85,6 +85,42 @@ multi-line comment
         ids = [t.value for t in tokens if t.type == "ID"]
         self.assertEqual(ids, ["x", "y"])
 
+    def test_illegal_character_raises_syntax_error(self):
+        lexer = Lexer("x = 1 @")
+
+        with self.assertRaisesRegex(SyntaxError, "Illegal character '@'"):
+            lexer.tokenize()
+
+    def test_unterminated_multiline_comment_raises_syntax_error(self):
+        lexer = Lexer("x = 1 /* missing close")
+
+        with self.assertRaisesRegex(SyntaxError, "Unterminated multi-line comment"):
+            lexer.tokenize()
+
+    def test_bad_unindent_raises_indentation_error(self):
+        code = '''if x > 1
+    say "yes"
+  say "bad"'''
+        lexer = Lexer(code)
+
+        with self.assertRaisesRegex(IndentationError, "Unindent does not match"):
+            lexer.tokenize()
+
+    def test_escaped_string_literal_is_unescaped(self):
+        lexer = Lexer(r'text = "quote: \"hi\""')
+        tokens = lexer.tokenize()
+
+        string_tokens = [token for token in tokens if token.type == "STRING"]
+        self.assertEqual(len(string_tokens), 1)
+        self.assertEqual(string_tokens[0].value, 'quote: "hi"')
+
+    def test_natural_language_operators_are_normalized(self):
+        lexer = Lexer("if x is at least 5 and y is not in items")
+        tokens = lexer.tokenize()
+        operator_tokens = [(token.type, token.value) for token in tokens if token.type in {"GE", "NOTIN"}]
+
+        self.assertEqual(operator_tokens, [("GE", ">="), ("NOTIN", "not in")])
+
 
 if __name__ == "__main__":
     unittest.main()
