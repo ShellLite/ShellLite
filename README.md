@@ -13,7 +13,7 @@ The project implements **Geometric Binding Parsing (GBP)**, an algorithm that de
 ## Key Features
 
 *   **Natural Language Syntax:** Designed to be read like plain English or pseudocode, reducing the cognitive load for beginners.
-*   **Python Interop:** Seamlessly import and utilize any Python module via a robust proxying layer.
+*   **Python Interop:** Seamlessly import and utilize any Python module via a proxying layer.
 *   **Cross Platform GUI:** A built in engine for creating desktop applications using an intuitive widget based syntax.
 *   **Integrated Package Management:** Built in support for installing and managing dependencies directly from GitHub repositories.
 
